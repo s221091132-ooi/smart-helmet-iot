@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     // Insert data into Supabase
     const { data, error } = await supabase
       .from('helmet_data')
-      .insert({
+      .insert([{
         battery_voltage: payload.battery_voltage,
         battery_percentage: payload.battery_percentage,
         remaining_capacity: payload.remaining_capacity,
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
         speed: payload.speed,
         altitude: payload.altitude,
         distance_traveled: payload.distance_traveled,
-      })
+      }] as any)
       .select();
 
     if (error) {

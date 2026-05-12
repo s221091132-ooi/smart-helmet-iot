@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         .update({
           reset_count: currentSession.reset_count + 1,
           last_reset_at: now,
-        })
+        } as any)
         .eq('id', currentSession.id)
         .select();
 
@@ -52,10 +52,10 @@ export async function POST(request: NextRequest) {
       // Create new session
       const { data, error } = await supabase
         .from('tracking_sessions')
-        .insert({
+        .insert([{
           reset_count: 1,
           last_reset_at: now,
-        })
+        }] as any)
         .select();
 
       if (error) {

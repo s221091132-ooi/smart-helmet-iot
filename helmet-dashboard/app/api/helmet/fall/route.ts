@@ -23,12 +23,12 @@ export async function POST(request: NextRequest) {
     // Insert fall alert into Supabase
     const { data, error } = await supabase
       .from('fall_alerts')
-      .insert({
+      .insert([{
         position_x: payload.position_x,
         position_y: payload.position_y,
         accel_magnitude: payload.accel_magnitude,
         acknowledged: false,
-      })
+      }] as any)
       .select();
 
     if (error) {
