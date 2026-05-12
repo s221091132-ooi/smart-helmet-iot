@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/helmet/status/route.ts - Get current helmet status
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';

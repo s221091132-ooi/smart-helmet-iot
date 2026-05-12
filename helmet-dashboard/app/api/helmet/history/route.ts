@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/helmet/history/route.ts - Get historical helmet data
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';

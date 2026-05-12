@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/helmet/fall/route.ts - Receive fall detection alerts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';

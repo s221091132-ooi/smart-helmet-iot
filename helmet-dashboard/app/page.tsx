@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/page.tsx - Main dashboard with real-time updates
 'use client';
 

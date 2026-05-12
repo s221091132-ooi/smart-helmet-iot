@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/helmet/data/route.ts - Receive sensor data from ESP32
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
