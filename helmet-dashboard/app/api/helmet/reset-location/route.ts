@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
       const { data, error } = await supabase
         .from('tracking_sessions')
         .update({
-          reset_count: currentSession.reset_count + 1,
+          reset_count: (currentSession as any).reset_count + 1,
           last_reset_at: now,
         } as any)
-        .eq('id', currentSession.id)
+        .eq('id', (currentSession as any).id)
         .select();
 
       if (error) {

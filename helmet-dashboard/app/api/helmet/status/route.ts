@@ -46,7 +46,7 @@ export async function GET() {
 
     let resetRequested = false;
     if (!sessionError && sessionData) {
-      const lastReset = new Date(sessionData.last_reset_at);
+      const lastReset = new Date((sessionData as any).last_reset_at);
       const now = new Date();
       const timeDiff = now.getTime() - lastReset.getTime();
       
