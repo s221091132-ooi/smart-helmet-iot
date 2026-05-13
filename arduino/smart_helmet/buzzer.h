@@ -68,11 +68,15 @@ void startFallAlertPattern() {
 
 // Stop any buzzer pattern
 void stopBuzzer() {
+    if (currentPattern != PATTERN_NONE) {
+        Serial.println("⛔ BUZZER: Stopping...");
+        Serial.printf("   Previous pattern: %s\n", getBuzzerPatternString());
+        Serial.println("   Reason: stopBuzzer() called");
+    }
     currentPattern = PATTERN_NONE;
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(LED_PIN, LOW);
     buzzerOn = false;
-    Serial.println("BUZZER: Stopped");
 }
 
 // Check if location reset has been received

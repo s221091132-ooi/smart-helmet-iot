@@ -73,8 +73,9 @@ export async function POST(request: NextRequest) {
       const now = new Date();
       const timeDiff = now.getTime() - lastReset.getTime();
       
-      // If reset was requested in the last 5 seconds, signal ESP32
-      if (timeDiff < 5000) {
+      // If reset was requested in the last 3 seconds, signal ESP32
+      // Short window to avoid false triggers on ESP32 reboot
+      if (timeDiff < 3000) {
         resetRequested = true;
       }
     }

@@ -178,8 +178,10 @@ void loop() {
             // Check if location reset was requested by server
             if (resetRequested && !isLocationResetReceived()) {
                 Serial.println("\n=================================");
-                Serial.println("LOCATION RESET RECEIVED!");
-                Serial.println("=================================\n");
+                Serial.println("📡 LOCATION RESET RECEIVED FROM SERVER!");
+                Serial.println("=================================");
+                Serial.println("Explanation: Dashboard 'Reset Location' button was clicked");
+                Serial.println("Or reset timestamp found in database (< 10 seconds old)\n");
                 
                 // Stop power-on pattern
                 stopBuzzer();
