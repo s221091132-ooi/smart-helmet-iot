@@ -6,6 +6,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include "config.h"
 #include "sensors.h"
@@ -13,7 +14,7 @@
 
 // HTTP client globals
 HTTPClient http;
-WiFiClient wifiClient;
+WiFiClientSecure wifiClient;
 bool wifiConnected = false;
 unsigned long lastConnectionAttempt = 0;
 const unsigned long CONNECTION_RETRY_INTERVAL = 5000;  // 5 seconds
@@ -84,6 +85,9 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
     }
     
     String endpoint = String(API_ENDPOINT) + "/api/helmet/data";
+    
+    // Set insecure mode for HTTPS (skip certificate validation)
+    wifiClient.setInsecure();
     
     http.begin(wifiClient, endpoint);
     http.addHeader("Content-Type", "application/json");
@@ -158,6 +162,9 @@ bool sendFallAlert(float accelMagnitude, float posX, float posY) {
     }
     
     String endpoint = String(API_ENDPOINT) + "/api/helmet/fall";
+    
+    // Set insecure mode for HTTPS (skip certificate validation)
+    wifiClient.setInsecure();
     
     http.begin(wifiClient, endpoint);
     http.addHeader("Content-Type", "application/json");
