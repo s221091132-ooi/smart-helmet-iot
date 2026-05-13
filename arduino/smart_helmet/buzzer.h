@@ -21,6 +21,9 @@ int buzzerStateStep = 0;
 bool buzzerOn = false;
 bool locationResetReceived = false;
 
+// Forward declarations
+const char* getBuzzerPatternString();
+
 // Initialize buzzer system
 void initializeBuzzer() {
     pinMode(BUZZER_PIN, OUTPUT);
