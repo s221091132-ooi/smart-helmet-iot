@@ -215,6 +215,27 @@ void loop() {
         lastSerialPrintTime = currentTime;
     }
     
+    // Check for serial commands for testing
+    if (Serial.available() > 0) {
+        char cmd = Serial.read();
+        switch(cmd) {
+            case 'b':
+            case 'B':
+                testBuzzer();
+                break;
+            case 't':
+            case 'T':
+                testAPIConnection();
+                break;
+            case 'r':
+            case 'R':
+                Serial.println("Manual reset button press simulation");
+                resetLocationTracking();
+                startResetConfirmPattern();
+                break;
+        }
+    }
+    
     // Small delay to prevent watchdog timer issues
     delay(10);
 }
@@ -295,4 +316,38 @@ void testAPIConnection() {
     } else {
         Serial.println("API connection test failed!");
     }
+}
+
+// Test buzzer - call this from Serial Monitor by typing 'b'
+void testBuzzer() {
+    Serial.println("\n=== BUZZER TEST ===");
+    Serial.println("Testing buzzer on GPIO 25...");
+    
+    // Test 1: Simple on/off
+    Serial.println("Test 1: Simple beep (1 second)");
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(1000);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(500);
+    
+    // Test 2: Multiple beeps
+    Serial.println("Test 2: Three short beeps");
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(BUZZER_PIN, HIGH);
+        delay(200);
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(200);
+    }
+    
+    // Test 3: PWM tone (for passive buzzer)
+    Serial.println("Test 3: PWM tone (if passive buzzer)");
+    tone(BUZZER_PIN, 2000, 1000);  // 2000Hz for 1 second
+    delay(1500);
+    
+    Serial.println("Buzzer test complete!");
+    Serial.println("If you didn't hear anything:");
+    Serial.println("1. Check wiring (GPIO 25 to buzzer +, GND to buzzer -)");
+    Serial.println("2. Try connecting buzzer directly to 3.3V to test if it works");
+    Serial.println("3. Measure voltage on GPIO 25 with multimeter");
+    Serial.println("===================\n");
 }
