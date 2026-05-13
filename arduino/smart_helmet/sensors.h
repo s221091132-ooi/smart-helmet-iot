@@ -15,11 +15,12 @@
 #define BATTERY_VOLTAGE_PIN 35   // Battery voltage divider (analog)
 #define BUZZER_PIN 25            // Buzzer output
 #define LED_PIN 26               // LED output
+#define RESET_BUTTON_PIN 13      // Reset location button (with internal pull-up)
 
 // Battery configuration
-#define BATTERY_MAX_VOLTAGE 4.2  // Maximum LiPo voltage
-#define BATTERY_MIN_VOLTAGE 3.0  // Minimum safe voltage
-#define BATTERY_CAPACITY 3000    // Battery capacity in mAh
+#define BATTERY_MAX_VOLTAGE 4.2    // Maximum LiPo voltage (fully charged)
+#define BATTERY_MIN_VOLTAGE 3.3    // Minimum safe voltage (updated for better accuracy)
+#define BATTERY_CAPACITY 2000      // Battery capacity in mAh (2000mAh)
 #define VOLTAGE_DIVIDER_RATIO 2.0  // Voltage divider ratio (R1+R2)/R2
 
 // ACS712 configuration (5A model)

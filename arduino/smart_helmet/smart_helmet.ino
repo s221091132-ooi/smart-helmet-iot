@@ -36,6 +36,9 @@ const unsigned long SERIAL_PRINT_INTERVAL = 5000;  // Print debug info every 5 s
 // System state
 bool systemInitialized = false;
 bool locationResetAcknowledged = false;
+bool lastButtonState = HIGH;  // Button not pressed (pull-up)
+unsigned long lastButtonPress = 0;
+const unsigned long BUTTON_DEBOUNCE = 50;  // 50ms debounce
 
 void setup() {
     // Initialize Serial communication
@@ -48,6 +51,10 @@ void setup() {
     
     // Initialize buzzer and LED first
     initializeBuzzer();
+    
+    // Initialize reset button
+    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);  // Enable internal pull-up resistor
+    Serial.println("Reset button initialized on GPIO 13");
     
     // Initialize sensors
     Serial.println("Initializing sensors...");
@@ -90,6 +97,20 @@ void loop() {
     if (!systemInitialized) return;
     
     unsigned long currentTime = millis();
+    
+    // Check reset button (hardware button)
+    bool currentButtonState = digitalRead(RESET_BUTTON_PIN);
+    if (currentButtonState == LOW && lastButtonState == HIGH) {
+        // Button pressed (LOW = pressed because of pull-up)
+        if (currentTime - lastButtonPress > BUTTON_DEBOUNCE) {
+            Serial.println("\n🔘 RESET BUTTON PRESSED!");
+            Serial.println("Resetting location to origin (0, 0)...");
+            resetLocationTracking();
+            startResetConfirmPattern();  // Beep-beep confirmation
+            lastButtonPress = currentTime;
+        }
+    }
+    lastButtonState = currentButtonState;
     
     // Update buzzer state machine
     updateBuzzer();
