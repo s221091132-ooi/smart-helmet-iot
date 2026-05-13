@@ -15,13 +15,16 @@
 #define BATTERY_VOLTAGE_PIN 35   // Battery voltage divider (analog)
 #define BUZZER_PIN 25            // Buzzer output
 #define LED_PIN 26               // LED output
-#define RESET_BUTTON_PIN 13      // Reset location button (with internal pull-up)
+#define RESET_BUTTON_PIN 27      // Reset location button (with pull-up)
 
 // Battery configuration
-#define BATTERY_MAX_VOLTAGE 4.2    // Maximum LiPo voltage (fully charged)
-#define BATTERY_MIN_VOLTAGE 3.3    // Minimum safe voltage (updated for better accuracy)
-#define BATTERY_CAPACITY 2000      // Battery capacity in mAh (2000mAh)
+#define BATTERY_MAX_VOLTAGE 4.2  // Maximum LiPo voltage (fully charged)
+#define BATTERY_MIN_VOLTAGE 3.0  // Minimum safe voltage (cutoff - don't discharge below this!)
+#define BATTERY_CAPACITY 2000    // Battery capacity in mAh
 #define VOLTAGE_DIVIDER_RATIO 2.0  // Voltage divider ratio (R1+R2)/R2
+
+// LiPo discharge curve reference:
+// 4.20V = 100% | 4.00V = ~90% | 3.85V = ~75% | 3.70V = ~50% | 3.50V = ~25% | 3.00V = 0%
 
 // ACS712 configuration (5A model)
 #define ACS712_SENSITIVITY 0.185  // 185mV per Amp for 5A model
@@ -111,7 +114,10 @@ bool initializeSensors() {
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(LED_PIN, LOW);
     
-    Serial.println("Analog sensors configured");
+    // Initialize button pin with internal pull-up
+    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+    
+    Serial.println("Analog sensors and button configured");
     
     return success;
 }
@@ -124,14 +130,29 @@ float readBatteryVoltage() {
     return voltage;
 }
 
-// Calculate battery percentage from voltage
+// Calculate battery percentage from voltage using LiPo discharge curve
 int calculateBatteryPercentage(float voltage) {
     if (voltage >= BATTERY_MAX_VOLTAGE) return 100;
     if (voltage <= BATTERY_MIN_VOLTAGE) return 0;
     
-    // Linear approximation (can be improved with battery discharge curve)
-    float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / 
-                       (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+    // Improved LiPo discharge curve approximation
+    // More accurate than linear for LiPo batteries
+    float percentage;
+    
+    if (voltage >= 4.0) {
+        // 4.2V - 4.0V: 100% - 90% (nearly flat)
+        percentage = 90.0 + ((voltage - 4.0) / 0.2) * 10.0;
+    } else if (voltage >= 3.7) {
+        // 4.0V - 3.7V: 90% - 40% (gradual)
+        percentage = 40.0 + ((voltage - 3.7) / 0.3) * 50.0;
+    } else if (voltage >= 3.5) {
+        // 3.7V - 3.5V: 40% - 15% (steeper)
+        percentage = 15.0 + ((voltage - 3.5) / 0.2) * 25.0;
+    } else {
+        // 3.5V - 3.0V: 15% - 0% (very steep, critical zone)
+        percentage = ((voltage - 3.0) / 0.5) * 15.0;
+    }
+    
     return constrain((int)percentage, 0, 100);
 }
 
@@ -236,6 +257,40 @@ void printSensorData() {
 // Check if battery is critically low
 bool isBatteryCritical() {
     return currentSensorData.batteryPercentage < 10;
+}
+
+// Check if reset button is pressed
+// Button connected between GPIO 27 and GND (using internal pull-up)
+// Returns true when button is pressed
+bool isResetButtonPressed() {
+    static unsigned long lastDebounceTime = 0;
+    static bool lastButtonState = HIGH;
+    static bool buttonPressed = false;
+    const unsigned long debounceDelay = 50; // 50ms debounce
+    
+    bool reading = digitalRead(RESET_BUTTON_PIN);
+    
+    // If button state changed, reset debounce timer
+    if (reading != lastButtonState) {
+        lastDebounceTime = millis();
+    }
+    
+    // If button state has been stable for debounceDelay
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        // If button is pressed (LOW because of pull-up)
+        if (reading == LOW && !buttonPressed) {
+            buttonPressed = true;
+            Serial.println("🔘 Reset button pressed!");
+            return true;
+        }
+        // If button is released
+        if (reading == HIGH) {
+            buttonPressed = false;
+        }
+    }
+    
+    lastButtonState = reading;
+    return false;
 }
 
 // Get current sensor data

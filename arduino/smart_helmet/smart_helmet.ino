@@ -36,9 +36,6 @@ const unsigned long SERIAL_PRINT_INTERVAL = 5000;  // Print debug info every 5 s
 // System state
 bool systemInitialized = false;
 bool locationResetAcknowledged = false;
-bool lastButtonState = HIGH;  // Button not pressed (pull-up)
-unsigned long lastButtonPress = 0;
-const unsigned long BUTTON_DEBOUNCE = 50;  // 50ms debounce
 
 void setup() {
     // Initialize Serial communication
@@ -51,10 +48,6 @@ void setup() {
     
     // Initialize buzzer and LED first
     initializeBuzzer();
-    
-    // Initialize reset button
-    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);  // Enable internal pull-up resistor
-    Serial.println("Reset button initialized on GPIO 13");
     
     // Initialize sensors
     Serial.println("Initializing sensors...");
@@ -97,20 +90,6 @@ void loop() {
     if (!systemInitialized) return;
     
     unsigned long currentTime = millis();
-    
-    // Check reset button (hardware button)
-    bool currentButtonState = digitalRead(RESET_BUTTON_PIN);
-    if (currentButtonState == LOW && lastButtonState == HIGH) {
-        // Button pressed (LOW = pressed because of pull-up)
-        if (currentTime - lastButtonPress > BUTTON_DEBOUNCE) {
-            Serial.println("\n🔘 RESET BUTTON PRESSED!");
-            Serial.println("Resetting location to origin (0, 0)...");
-            resetLocationTracking();
-            startResetConfirmPattern();  // Beep-beep confirmation
-            lastButtonPress = currentTime;
-        }
-    }
-    lastButtonState = currentButtonState;
     
     // Update buzzer state machine
     updateBuzzer();
@@ -171,6 +150,25 @@ void loop() {
         }
     }
     
+    // Check for hardware reset button press
+    if (isResetButtonPressed()) {
+        Serial.println("\n=================================");
+        Serial.println("HARDWARE BUTTON: LOCATION RESET!");
+        Serial.println("=================================\n");
+        
+        // Stop any current buzzer pattern
+        stopBuzzer();
+        
+        // Reset location to origin
+        resetLocation();
+        
+        // Play reset confirmation pattern
+        startResetConfirmPattern();
+        
+        Serial.println("Location reset to (0, 0)");
+        Serial.println("Buzzer: BEEP-BEEP confirmation");
+    }
+    
     // Send data to server at specified interval
     if (currentTime - lastDataSendTime >= DATA_SEND_INTERVAL) {
         if (isWiFiConnected()) {
@@ -213,27 +211,6 @@ void loop() {
         Serial.println("====================\n");
         
         lastSerialPrintTime = currentTime;
-    }
-    
-    // Check for serial commands for testing
-    if (Serial.available() > 0) {
-        char cmd = Serial.read();
-        switch(cmd) {
-            case 'b':
-            case 'B':
-                testBuzzer();
-                break;
-            case 't':
-            case 'T':
-                testAPIConnection();
-                break;
-            case 'r':
-            case 'R':
-                Serial.println("Manual reset button press simulation");
-                resetLocationTracking();
-                startResetConfirmPattern();
-                break;
-        }
     }
     
     // Small delay to prevent watchdog timer issues
@@ -316,38 +293,4 @@ void testAPIConnection() {
     } else {
         Serial.println("API connection test failed!");
     }
-}
-
-// Test buzzer - call this from Serial Monitor by typing 'b'
-void testBuzzer() {
-    Serial.println("\n=== BUZZER TEST ===");
-    Serial.println("Testing buzzer on GPIO 25...");
-    
-    // Test 1: Simple on/off
-    Serial.println("Test 1: Simple beep (1 second)");
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(1000);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(500);
-    
-    // Test 2: Multiple beeps
-    Serial.println("Test 2: Three short beeps");
-    for (int i = 0; i < 3; i++) {
-        digitalWrite(BUZZER_PIN, HIGH);
-        delay(200);
-        digitalWrite(BUZZER_PIN, LOW);
-        delay(200);
-    }
-    
-    // Test 3: PWM tone (for passive buzzer)
-    Serial.println("Test 3: PWM tone (if passive buzzer)");
-    tone(BUZZER_PIN, 2000, 1000);  // 2000Hz for 1 second
-    delay(1500);
-    
-    Serial.println("Buzzer test complete!");
-    Serial.println("If you didn't hear anything:");
-    Serial.println("1. Check wiring (GPIO 25 to buzzer +, GND to buzzer -)");
-    Serial.println("2. Try connecting buzzer directly to 3.3V to test if it works");
-    Serial.println("3. Measure voltage on GPIO 25 with multimeter");
-    Serial.println("===================\n");
 }
