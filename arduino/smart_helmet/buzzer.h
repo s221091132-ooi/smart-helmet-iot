@@ -42,7 +42,9 @@ void startPowerOnPattern() {
     currentPattern = PATTERN_POWER_ON;
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
-    Serial.println("BUZZER: Starting power-on pattern");
+    Serial.println("🔔 BUZZER: Starting power-on pattern");
+    Serial.println("    Pattern: BEEP-BEEP-BEEP-BEEP-BEEP (repeat)");
+    Serial.println("    Press RESET BUTTON to stop");
 }
 
 // Start reset confirmation pattern (beep-beep-beeeep)
@@ -51,7 +53,8 @@ void startResetConfirmPattern() {
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
     locationResetReceived = true;
-    Serial.println("BUZZER: Starting reset confirmation pattern");
+    Serial.println("🔔 BUZZER: Starting reset confirmation pattern");
+    Serial.println("    Pattern: BEEP-BEEP-BEEEEP");
 }
 
 // Start fall alert pattern (continuous beeping)
