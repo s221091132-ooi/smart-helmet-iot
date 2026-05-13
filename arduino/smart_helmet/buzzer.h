@@ -21,9 +21,6 @@ int buzzerStateStep = 0;
 bool buzzerOn = false;
 bool locationResetReceived = false;
 
-extern int BUZZER_PIN;
-extern int LED_PIN;
-
 // Initialize buzzer system
 void initializeBuzzer() {
     pinMode(BUZZER_PIN, OUTPUT);
