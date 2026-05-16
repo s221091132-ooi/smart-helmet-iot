@@ -11,7 +11,8 @@ enum BuzzerPattern {
     PATTERN_NONE,
     PATTERN_POWER_ON,
     PATTERN_RESET_CONFIRM,
-    PATTERN_FALL_ALERT
+    PATTERN_FALL_ALERT,
+    PATTERN_HIGH_TEMP_ALERT
 };
 
 // Buzzer state management
@@ -67,6 +68,17 @@ void startFallAlertPattern() {
     buzzerStateStep = 0;
     digitalWrite(LED_PIN, HIGH);  // Turn on LED
     Serial.println("BUZZER: Starting fall alert pattern");
+}
+
+// Start high temperature alert pattern (continuous long beeps: TIIIIT-TIIIIT-TIIIIT)
+void startHighTempAlertPattern() {
+    currentPattern = PATTERN_HIGH_TEMP_ALERT;
+    buzzerStateStartTime = millis();
+    buzzerStateStep = 0;
+    digitalWrite(LED_PIN, HIGH);  // Turn on LED
+    Serial.println("🔔 BUZZER: Starting high temperature alert pattern");
+    Serial.println("    Pattern: TIIIIT-TIIIIT-TIIIIT (continuous long beeps)");
+    Serial.println("    Reason: Temperature exceeded 35°C!");
 }
 
 // Stop any buzzer pattern
@@ -257,6 +269,38 @@ void updateBuzzer() {
                 }
             }
             break;
+            
+        case PATTERN_HIGH_TEMP_ALERT:
+            // High temperature alert: continuous long beeps (800ms on, 300ms off)
+            // Pattern: TIIIIT-pause-TIIIIT-pause-TIIIIT (repeat)
+            
+            if (buzzerStateStep == 0) {
+                // Long beep phase (800ms)
+                if (!buzzerOn) {
+                    digitalWrite(BUZZER_PIN, HIGH);
+                    digitalWrite(LED_PIN, HIGH);
+                    buzzerOn = true;
+                }
+                
+                if (elapsed >= 800) {
+                    digitalWrite(BUZZER_PIN, LOW);
+                    buzzerOn = false;
+                    buzzerStateStep = 1;
+                    buzzerStateStartTime = currentTime;
+                }
+            } else {
+                // Pause phase (300ms)
+                if (buzzerOn) {
+                    digitalWrite(BUZZER_PIN, LOW);
+                    buzzerOn = false;
+                }
+                
+                if (elapsed >= 300) {
+                    buzzerStateStep = 0;
+                    buzzerStateStartTime = currentTime;
+                }
+            }
+            break;
     }
 }
 
@@ -267,6 +311,7 @@ const char* getBuzzerPatternString() {
         case PATTERN_POWER_ON: return "POWER_ON";
         case PATTERN_RESET_CONFIRM: return "RESET_CONFIRM";
         case PATTERN_FALL_ALERT: return "FALL_ALERT";
+        case PATTERN_HIGH_TEMP_ALERT: return "HIGH_TEMP_ALERT";
         default: return "UNKNOWN";
     }
 }

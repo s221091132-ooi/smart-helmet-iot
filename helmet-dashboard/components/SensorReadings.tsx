@@ -11,6 +11,8 @@ export default function SensorReadings({
   altitude,
   distanceTraveled,
 }: SensorReadingsProps) {
+  const isHighTemp = temperature > 35;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
       <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
@@ -18,16 +20,41 @@ export default function SensorReadings({
       </h2>
 
       <div className="space-y-4">
+        {/* High Temperature Warning Banner */}
+        {isHighTemp && (
+          <div className="p-4 bg-red-100 dark:bg-red-900 border-2 border-red-500 rounded-lg animate-pulse">
+            <div className="flex items-center">
+              <svg className="w-6 h-6 text-red-600 dark:text-red-300 mr-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <div className="text-sm font-bold text-red-800 dark:text-red-200">
+                  ⚠️ HIGH TEMPERATURE ALERT!
+                </div>
+                <div className="text-xs text-red-700 dark:text-red-300 mt-1">
+                  Temperature exceeds safe threshold (35°C). Please cool down immediately!
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Temperature */}
-        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900 dark:to-red-900 rounded-lg">
+        <div className={`flex items-center justify-between p-4 rounded-lg ${
+          isHighTemp 
+            ? 'bg-gradient-to-r from-red-100 to-red-200 dark:from-red-900 dark:to-red-800 border-2 border-red-500' 
+            : 'bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900 dark:to-red-900'
+        }`}>
           <div className="flex items-center">
-            <svg className="w-8 h-8 text-orange-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+            <svg className={`w-8 h-8 mr-3 ${isHighTemp ? 'text-red-600 dark:text-red-300' : 'text-orange-500'}`} fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 2a1 1 0 011 1v6.586l2.707 2.707a1 1 0 01-1.414 1.414L9 10.414V3a1 1 0 011-1z" clipRule="evenodd" />
               <path d="M6 6a4 4 0 108 0 4 4 0 00-8 0z" />
             </svg>
             <div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">Temperature</div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className={`text-sm ${isHighTemp ? 'text-red-700 dark:text-red-200 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>
+                Temperature {isHighTemp && '⚠️'}
+              </div>
+              <div className={`text-2xl font-bold ${isHighTemp ? 'text-red-800 dark:text-red-100' : 'text-gray-900 dark:text-white'}`}>
                 {formatTemperature(temperature)}
               </div>
             </div>

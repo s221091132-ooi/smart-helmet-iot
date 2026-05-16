@@ -150,6 +150,33 @@ void loop() {
         }
     }
     
+    // Check for high temperature alert (above 35°C)
+    static bool highTempAlertActive = false;
+    if (isTemperatureHigh()) {
+        if (!highTempAlertActive) {
+            Serial.println("\n!!! ⚠️  HIGH TEMPERATURE ALERT ⚠️  !!!");
+            Serial.printf("Temperature: %.1f°C (Threshold: 35°C)\n", sensorData.temperature);
+            Serial.println("Starting temperature warning buzzer...\n");
+            
+            // Start high temperature alert buzzer (only if not already playing fall alert)
+            if (!isBuzzerActive() || getBuzzerPatternString() != "FALL_ALERT") {
+                startHighTempAlertPattern();
+            }
+            
+            highTempAlertActive = true;
+        }
+    } else {
+        // Temperature back to normal, stop alert
+        if (highTempAlertActive) {
+            Serial.println("\n✅ Temperature back to normal range");
+            String currentPatternStr = String(getBuzzerPatternString());
+            if (currentPatternStr == "HIGH_TEMP_ALERT") {
+                stopBuzzer();
+            }
+            highTempAlertActive = false;
+        }
+    }
+    
     // Check for hardware reset button press
     if (isResetButtonPressed()) {
         Serial.println("\n=================================");

@@ -287,6 +287,11 @@ bool isBatteryCritical() {
     return currentSensorData.batteryPercentage < 10;
 }
 
+// Check if temperature is critically high (above 35°C)
+bool isTemperatureHigh() {
+    return currentSensorData.temperature > 35.0;
+}
+
 // Check if reset button is pressed
 // Button connected between GPIO 27 and GND (using internal pull-up)
 // Returns true when button is pressed
