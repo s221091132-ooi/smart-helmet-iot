@@ -8,7 +8,7 @@
 #include <MPU9250.h>
 
 // Pin definitions
-#define LM35_PIN 4               // LM35 temperature sensor (analog)
+#define LM35_PIN 32              // LM35 temperature sensor (analog) - CHANGED from pin 4 to 32 (more stable)
 #define ACS712_PIN 35            // ACS712 current sensor (analog) - MOVED from 34 to 35
 #define BATTERY_VOLTAGE_PIN 34   // Battery voltage sensor (analog) - YOUR ACTUAL WIRING
 #define BUZZER_PIN 25            // Buzzer output
@@ -93,7 +93,7 @@ bool initializeSensors() {
     pinMode(LM35_PIN, INPUT);
     pinMode(ACS712_PIN, INPUT);
     pinMode(BATTERY_VOLTAGE_PIN, INPUT);
-    Serial.println("LM35 temperature sensor configured on pin 4");
+    Serial.println("LM35 temperature sensor configured on GPIO 32 (pin 4 had conflict with I2C)");
     
     // Initialize output pins
     pinMode(BUZZER_PIN, OUTPUT);
