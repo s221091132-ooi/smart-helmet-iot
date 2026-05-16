@@ -27,6 +27,7 @@
 // LM35 configuration
 #define LM35_V_REF 3.3           // ESP32 reference voltage
 #define LM35_ADC_RESOLUTION 4095.0  // ESP32 12-bit ADC (0 to 4095)
+#define LM35_CALIBRATION_OFFSET 6.0  // Calibration offset in °C (adjust if needed)
 
 // ACS712 configuration (5A model)
 #define ACS712_SENSITIVITY 0.185  // 185mV per Amp for 5A model
@@ -192,17 +193,22 @@ float readSolarCurrent() {
 
 // Read temperature from LM35
 float readTemperature() {
-    // Read the raw analog value from the sensor (0 to 4095)
-    int rawTemp = analogRead(LM35_PIN);
+    // Average 10 samples for better accuracy
+    long totalRaw = 0;
+    for (int i = 0; i < 10; i++) {
+        totalRaw += analogRead(LM35_PIN);
+        delay(2);
+    }
+    float avgRaw = totalRaw / 10.0;
     
     // Convert the raw value into the actual voltage arriving at the ESP32 pin
-    float tempVoltage = (rawTemp / LM35_ADC_RESOLUTION) * LM35_V_REF;
+    float tempVoltage = (avgRaw / LM35_ADC_RESOLUTION) * LM35_V_REF;
     
     // Convert the voltage to Celsius (LM35: 10mV per degree Celsius)
-    float temperatureC = tempVoltage * 100.0;
+    float temperatureC = (tempVoltage * 100.0) + LM35_CALIBRATION_OFFSET;
     
     // Sanity check: if temperature is out of reasonable range, return default
-    if (temperatureC < -50 || temperatureC > 150) {
+    if (temperatureC < -10 || temperatureC > 100) {
         Serial.println("WARNING: LM35 read error!");
         return 25.0;  // Return default room temperature
     }
