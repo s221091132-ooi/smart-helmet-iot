@@ -11,8 +11,8 @@
 
 // Pin definitions
 #define ONE_WIRE_BUS 4           // DS18B20 temperature sensor
-#define ACS712_PIN 34            // ACS712 current sensor (analog)
-#define BATTERY_VOLTAGE_PIN 35   // Battery voltage divider (analog)
+#define ACS712_PIN 35            // ACS712 current sensor (analog) - MOVED from 34 to 35
+#define BATTERY_VOLTAGE_PIN 34   // Battery voltage sensor (analog) - YOUR ACTUAL WIRING
 #define BUZZER_PIN 25            // Buzzer output
 #define LED_PIN 26               // LED output
 #define RESET_BUTTON_PIN 27      // Reset location button (with pull-up)
@@ -21,7 +21,7 @@
 #define BATTERY_MAX_VOLTAGE 4.2  // Maximum LiPo voltage (fully charged)
 #define BATTERY_MIN_VOLTAGE 3.0  // Minimum safe voltage (cutoff - don't discharge below this!)
 #define BATTERY_CAPACITY 2000    // Battery capacity in mAh
-#define VOLTAGE_DIVIDER_RATIO 2.0  // Voltage divider ratio (R1+R2)/R2
+#define VOLTAGE_DIVIDER_RATIO 6.36  // Voltage divider ratio - CHANGED from 2.0 to 6.36 (calibrated)
 
 // LiPo discharge curve reference:
 // 4.20V = 100% | 4.00V = ~90% | 3.85V = ~75% | 3.70V = ~50% | 3.50V = ~25% | 3.00V = 0%
