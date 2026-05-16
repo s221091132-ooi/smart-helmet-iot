@@ -287,9 +287,9 @@ bool isBatteryCritical() {
     return currentSensorData.batteryPercentage < 10;
 }
 
-// Check if temperature is critically high (above 35°C)
+// Check if temperature is critically high (35°C or above)
 bool isTemperatureHigh() {
-    return currentSensorData.temperature > 35.0;
+    return currentSensorData.temperature >= 35.0;  // Changed from > to >= (include 35.0°C)
 }
 
 // Check if reset button is pressed

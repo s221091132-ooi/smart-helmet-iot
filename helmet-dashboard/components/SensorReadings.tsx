@@ -11,7 +11,7 @@ export default function SensorReadings({
   altitude,
   distanceTraveled,
 }: SensorReadingsProps) {
-  const isHighTemp = temperature > 35;
+  const isHighTemp = temperature >= 35;  // Changed from > to >= (include 35.0°C)
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
