@@ -21,7 +21,7 @@
 #define BATTERY_MAX_VOLTAGE 4.2  // Maximum LiPo voltage (fully charged)
 #define BATTERY_MIN_VOLTAGE 3.0  // Minimum safe voltage (cutoff - don't discharge below this!)
 #define BATTERY_CAPACITY 2000    // Battery capacity in mAh
-#define VOLTAGE_DIVIDER_RATIO 6.36  // Voltage divider ratio - CHANGED from 2.0 to 6.36 (calibrated)
+#define VOLTAGE_DIVIDER_RATIO 5.98  // Voltage divider ratio - Calibrated with multimeter (3.83V actual)
 
 // LiPo discharge curve reference:
 // 4.20V = 100% | 4.00V = ~90% | 3.85V = ~75% | 3.70V = ~50% | 3.50V = ~25% | 3.00V = 0%
