@@ -6,11 +6,9 @@
 
 #include <Wire.h>
 #include <MPU9250.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 
 // Pin definitions
-#define ONE_WIRE_BUS 4           // DS18B20 temperature sensor
+#define LM35_PIN 4               // LM35 temperature sensor (analog)
 #define ACS712_PIN 35            // ACS712 current sensor (analog) - MOVED from 34 to 35
 #define BATTERY_VOLTAGE_PIN 34   // Battery voltage sensor (analog) - YOUR ACTUAL WIRING
 #define BUZZER_PIN 25            // Buzzer output
@@ -26,16 +24,16 @@
 // LiPo discharge curve reference:
 // 4.20V = 100% | 4.00V = ~90% | 3.85V = ~75% | 3.70V = ~50% | 3.50V = ~25% | 3.00V = 0%
 
+// LM35 configuration
+#define LM35_V_REF 3.3           // ESP32 reference voltage
+#define LM35_ADC_RESOLUTION 4095.0  // ESP32 12-bit ADC (0 to 4095)
+
 // ACS712 configuration (5A model)
 #define ACS712_SENSITIVITY 0.185  // 185mV per Amp for 5A model
 float ACS712_OFFSET = 2.5;        // Offset voltage at zero current (will be calibrated at startup)
 
 // MPU9250 sensor object
 MPU9250 mpu;
-
-// DS18B20 temperature sensor
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature tempSensor(&oneWire);
 
 // Sensor data structure
 struct SensorData {
@@ -91,22 +89,11 @@ bool initializeSensors() {
         Serial.println("MPU9250 calibration complete");
     }
     
-    // Initialize DS18B20 temperature sensor
-    tempSensor.begin();
-    int deviceCount = tempSensor.getDeviceCount();
-    if (deviceCount == 0) {
-        Serial.println("WARNING: DS18B20 not found!");
-        success = false;
-    } else {
-        Serial.print("DS18B20 found: ");
-        Serial.print(deviceCount);
-        Serial.println(" device(s)");
-        tempSensor.setResolution(12);  // 12-bit resolution (0.0625°C)
-    }
-    
-    // Initialize analog pins
+    // Initialize analog pins for temperature and current sensors
+    pinMode(LM35_PIN, INPUT);
     pinMode(ACS712_PIN, INPUT);
     pinMode(BATTERY_VOLTAGE_PIN, INPUT);
+    Serial.println("LM35 temperature sensor configured on pin 4");
     
     // Initialize output pins
     pinMode(BUZZER_PIN, OUTPUT);
@@ -203,18 +190,24 @@ float readSolarCurrent() {
     return abs(current);
 }
 
-// Read temperature from DS18B20
+// Read temperature from LM35
 float readTemperature() {
-    tempSensor.requestTemperatures();
-    float temp = tempSensor.getTempCByIndex(0);
+    // Read the raw analog value from the sensor (0 to 4095)
+    int rawTemp = analogRead(LM35_PIN);
     
-    // Check for sensor error
-    if (temp == DEVICE_DISCONNECTED_C || temp == 85.0) {
-        Serial.println("WARNING: DS18B20 read error!");
+    // Convert the raw value into the actual voltage arriving at the ESP32 pin
+    float tempVoltage = (rawTemp / LM35_ADC_RESOLUTION) * LM35_V_REF;
+    
+    // Convert the voltage to Celsius (LM35: 10mV per degree Celsius)
+    float temperatureC = tempVoltage * 100.0;
+    
+    // Sanity check: if temperature is out of reasonable range, return default
+    if (temperatureC < -50 || temperatureC > 150) {
+        Serial.println("WARNING: LM35 read error!");
         return 25.0;  // Return default room temperature
     }
     
-    return temp;
+    return temperatureC;
 }
 
 // Read MPU9250 accelerometer, gyroscope, and magnetometer

@@ -72,14 +72,14 @@ void setup() {
         Serial.println("Data will not be transmitted to server");
     }
     
-    // Start power-on buzzer pattern (will loop until location reset received)
+    // Start power-on buzzer pattern (will loop until physical button is pressed)
     startPowerOnPattern();
     
     Serial.println("\n=================================");
     Serial.println("SYSTEM READY");
     Serial.println("=================================");
-    Serial.println("\nWaiting for location reset from website...");
-    Serial.println("The buzzer will beep until you press 'Reset Location' on the dashboard.\n");
+    Serial.println("\nBuzzer is beeping...");
+    Serial.println("Press the PHYSICAL RESET BUTTON (GPIO 27) to stop the buzzer.\n");
     
     systemInitialized = true;
     lastDataSendTime = millis();
@@ -156,17 +156,17 @@ void loop() {
         Serial.println("HARDWARE BUTTON: LOCATION RESET!");
         Serial.println("=================================\n");
         
-        // Stop any current buzzer pattern
+        // Stop power-on buzzer pattern
         stopBuzzer();
         
         // Reset location to origin
         resetLocation();
         
-        // Play reset confirmation pattern
+        // Play reset confirmation pattern (3 fast beeps + long beep)
         startResetConfirmPattern();
         
         Serial.println("Location reset to (0, 0)");
-        Serial.println("Buzzer: BEEP-BEEP confirmation");
+        Serial.println("Buzzer: 3 fast beeps + long beep confirmation");
     }
     
     // Send data to server at specified interval
@@ -181,16 +181,12 @@ void loop() {
                 Serial.println("📡 LOCATION RESET RECEIVED FROM SERVER!");
                 Serial.println("=================================");
                 Serial.println("Explanation: Dashboard 'Reset Location' button was clicked");
-                Serial.println("Or reset timestamp found in database (< 10 seconds old)\n");
+                Serial.println("Or reset timestamp found in database (< 10 seconds old)");
+                Serial.println("NOTE: This does NOT stop the power-on buzzer!");
+                Serial.println("Only the PHYSICAL BUTTON (GPIO 27) stops the buzzer.\n");
                 
-                // Stop power-on pattern
-                stopBuzzer();
-                
-                // Reset location to origin
+                // Reset location to origin (but don't stop buzzer)
                 resetLocation();
-                
-                // Play reset confirmation pattern
-                startResetConfirmPattern();
                 
                 locationResetAcknowledged = true;
             }

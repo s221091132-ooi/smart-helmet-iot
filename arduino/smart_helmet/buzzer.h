@@ -50,14 +50,14 @@ void startPowerOnPattern() {
     Serial.println("    Press RESET BUTTON to stop");
 }
 
-// Start reset confirmation pattern (beep-beep-beeeep)
+// Start reset confirmation pattern (3 fast beeps + long beep: TIT-TIT-TIT-TIIIIT)
 void startResetConfirmPattern() {
     currentPattern = PATTERN_RESET_CONFIRM;
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
     locationResetReceived = true;
     Serial.println("🔔 BUZZER: Starting reset confirmation pattern");
-    Serial.println("    Pattern: BEEP-BEEP-BEEEEP");
+    Serial.println("    Pattern: TIT-TIT-TIT-TIIIIT (3 fast + 1 long)");
 }
 
 // Start fall alert pattern (continuous beeping)
@@ -143,8 +143,9 @@ void updateBuzzer() {
             break;
             
         case PATTERN_RESET_CONFIRM:
-            // Reset confirmation: beep (100ms), pause (100ms), beep (100ms), pause (100ms), beeeep (500ms)
-            // Steps: 0=beep1_on, 1=pause1, 2=beep2_on, 3=pause2, 4=long_beep, 5=done
+            // Reset confirmation: 3 fast beeps + 1 long beep
+            // beep (100ms), pause (100ms), beep (100ms), pause (100ms), beep (100ms), pause (100ms), beeeep (500ms)
+            // Steps: 0=beep1_on, 1=pause1, 2=beep2_on, 3=pause2, 4=beep3_on, 5=pause3, 6=long_beep, 7=done
             
             switch (buzzerStateStep) {
                 case 0:  // First beep (100ms)
@@ -187,7 +188,27 @@ void updateBuzzer() {
                     }
                     break;
                     
-                case 4:  // Long beep (500ms)
+                case 4:  // Third beep (100ms)
+                    if (!buzzerOn) {
+                        digitalWrite(BUZZER_PIN, HIGH);
+                        buzzerOn = true;
+                    }
+                    if (elapsed >= 100) {
+                        digitalWrite(BUZZER_PIN, LOW);
+                        buzzerOn = false;
+                        buzzerStateStep++;
+                        buzzerStateStartTime = currentTime;
+                    }
+                    break;
+                    
+                case 5:  // Third pause (100ms)
+                    if (elapsed >= 100) {
+                        buzzerStateStep++;
+                        buzzerStateStartTime = currentTime;
+                    }
+                    break;
+                    
+                case 6:  // Long beep (500ms)
                     if (!buzzerOn) {
                         digitalWrite(BUZZER_PIN, HIGH);
                         buzzerOn = true;
@@ -200,7 +221,7 @@ void updateBuzzer() {
                     }
                     break;
                     
-                case 5:  // Done
+                case 7:  // Done
                     stopBuzzer();
                     break;
             }

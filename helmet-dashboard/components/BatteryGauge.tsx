@@ -90,10 +90,10 @@ export default function BatteryGauge({
           {/* Solar Charging */}
           <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Solar Charge
+              Solar Current
             </span>
             <span className="text-sm font-bold text-gray-900 dark:text-white">
-              {solarCurrent > 0 ? (
+              {solarCurrent > 0.01 ? (
                 <span className="text-green-500 flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
@@ -101,7 +101,7 @@ export default function BatteryGauge({
                   {solarCurrent.toFixed(2)} A
                 </span>
               ) : (
-                <span className="text-gray-400">Not charging</span>
+                <span className="text-gray-400">{solarCurrent.toFixed(2)} A</span>
               )}
             </span>
           </div>
