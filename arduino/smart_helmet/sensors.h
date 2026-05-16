@@ -28,7 +28,7 @@
 
 // ACS712 configuration (5A model)
 #define ACS712_SENSITIVITY 0.185  // 185mV per Amp for 5A model
-#define ACS712_OFFSET 2.5         // Offset voltage at zero current
+float ACS712_OFFSET = 2.5;        // Offset voltage at zero current (will be calibrated at startup)
 
 // MPU9250 sensor object
 MPU9250 mpu;
@@ -117,6 +117,23 @@ bool initializeSensors() {
     // Initialize button pin with internal pull-up
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
     
+    // Calibrate ACS712 current sensor (find zero-current offset)
+    Serial.println("Calibrating ACS712 current sensor...");
+    Serial.println("  Ensure no solar current is flowing!");
+    delay(1000);
+    
+    long rawZero = 0;
+    for (int i = 0; i < 100; i++) {
+        rawZero += analogRead(ACS712_PIN);
+        delay(10);
+    }
+    ACS712_OFFSET = (rawZero / 100.0 / 4095.0) * 3.3;
+    
+    Serial.print("  ACS712 zero-current offset: ");
+    Serial.print(ACS712_OFFSET, 3);
+    Serial.println(" V");
+    Serial.println("  ACS712 calibration complete!");
+    
     Serial.println("Analog sensors and button configured");
     
     return success;
@@ -161,16 +178,28 @@ int calculateRemainingCapacity(int percentage) {
     return (BATTERY_CAPACITY * percentage) / 100;
 }
 
-// Read solar charging current from ACS712
+// Read solar charging current from ACS712 with averaging and deadband filter
 float readSolarCurrent() {
-    int rawValue = analogRead(ACS712_PIN);
+    // Average 50 samples to reduce noise
+    long totalRaw = 0;
+    for (int i = 0; i < 50; i++) {
+        totalRaw += analogRead(ACS712_PIN);
+        delay(2);
+    }
+    float avgRaw = totalRaw / 50.0;
+    
     // Convert ADC to voltage
-    float voltage = (rawValue / 4095.0) * 3.3;
+    float voltage = (avgRaw / 4095.0) * 3.3;
     
     // Calculate current: (Voltage - Offset) / Sensitivity
     float current = (voltage - ACS712_OFFSET) / ACS712_SENSITIVITY;
     
-    // Return absolute value (charging current)
+    // Deadband filter: values between -0.03A and +0.03A are noise, set to 0
+    if (current > -0.03 && current < 0.03) {
+        current = 0.0;
+    }
+    
+    // Return absolute value (charging current is always positive)
     return abs(current);
 }
 
