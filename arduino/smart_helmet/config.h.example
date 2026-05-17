@@ -1,0 +1,18 @@
+// config.h - Configuration file for Smart Helmet
+// IMPORTANT: Copy this file to config.h and replace placeholder values with your actual credentials
+// Add config.h to .gitignore to keep credentials private
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi Configuration
+#define WIFI_SSID "YOUR_WIFI_SSID"              // Replace with your WiFi SSID
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"      // Replace with your WiFi password
+
+// API Configuration
+#define API_ENDPOINT "https://helmet-dashboard-kappa.vercel.app"  // Your Vercel production URL
+
+// Data transmission interval (milliseconds)
+#define DATA_SEND_INTERVAL 1000  // Send data every 1 second
+
+#endif // CONFIG_H
