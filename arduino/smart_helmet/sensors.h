@@ -296,9 +296,19 @@ bool isResetButtonPressed() {
     
     bool currentButtonState = digitalRead(RESET_BUTTON_PIN);
     
+    // Debug: Print button state every second
+    static unsigned long lastDebugPrint = 0;
+    if (millis() - lastDebugPrint > 1000) {
+        Serial.printf("DEBUG: Button state = %s (HIGH=not pressed, LOW=pressed)\n", 
+                      currentButtonState == HIGH ? "HIGH" : "LOW");
+        lastDebugPrint = millis();
+    }
+    
     // If button state changed, reset debounce timer
     if (currentButtonState != lastButtonState) {
         lastDebounceTime = millis();
+        Serial.printf("DEBUG: Button state changed to %s\n", 
+                      currentButtonState == HIGH ? "HIGH" : "LOW");
     }
     
     // Check if button has been stable for debounce delay
@@ -306,6 +316,7 @@ bool isResetButtonPressed() {
         // If button is pressed (LOW) and was not pressed before
         if (currentButtonState == LOW && lastButtonState == HIGH) {
             lastButtonState = currentButtonState;
+            Serial.println("DEBUG: ✅ Button PRESS detected!");
             return true;  // Button press detected
         }
     }
