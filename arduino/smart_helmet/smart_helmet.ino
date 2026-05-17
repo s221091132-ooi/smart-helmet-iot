@@ -241,8 +241,6 @@ void loop() {
         Serial.println();
         printFallStatus();
         Serial.printf("Buzzer Pattern: %s\n", getBuzzerPatternString());
-        Serial.printf("Buzzer Active: %s\n", isBuzzerActive() ? "YES" : "NO");
-        Serial.printf("System Uptime: %lu seconds\n", millis() / 1000);
         Serial.println("====================\n");
         
         lastSerialPrintTime = currentTime;

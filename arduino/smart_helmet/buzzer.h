@@ -41,13 +41,14 @@ void initializeBuzzer() {
     Serial.println("Buzzer system initialized");
 }
 
-// Start power-on pattern (5 beeps, pause, repeat until reset)
+// Start power-on pattern (3 beeps with 5-second rest, repeat until reset)
 void startPowerOnPattern() {
     currentPattern = PATTERN_POWER_ON;
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
     Serial.println("🔔 BUZZER: Starting power-on pattern");
-    Serial.println("    Pattern: BEEP-BEEP-BEEP-BEEP-BEEP (repeat)");
+    Serial.println("    Pattern: TIT-TIT-TIT (3 beeps) + 5 sec rest (repeat)");
+    Serial.println("    Note: Long rest prevents piezo buzzer thermal shutdown");
     Serial.println("    Press RESET BUTTON to stop");
 }
 
@@ -115,15 +116,15 @@ void updateBuzzer() {
             break;
             
         case PATTERN_POWER_ON:
-            // Power-on pattern: 5 beeps (100ms on, 100ms off), then 2 second pause, repeat
-            // Steps: 0=beep1_on, 1=beep1_off, 2=beep2_on, 3=beep2_off, 4=beep3_on, 5=beep3_off,
-            //        6=beep4_on, 7=beep4_off, 8=beep5_on, 9=beep5_off, 10=pause
+            // Power-on pattern: 3 beeps (150ms on, 150ms off), then 5 second pause, repeat
+            // Longer rest period to prevent piezo buzzer thermal shutdown
+            // Steps: 0=beep1_on, 1=beep1_off, 2=beep2_on, 3=beep2_off, 4=beep3_on, 5=beep3_off, 6=pause
             
-            if (buzzerStateStep < 10) {
-                // Beeping phase
+            if (buzzerStateStep < 6) {
+                // Beeping phase (3 beeps only)
                 if (buzzerStateStep % 2 == 0) {
-                    // On phase (100ms)
-                    if (elapsed < 100) {
+                    // On phase (150ms - slightly longer for better sound)
+                    if (elapsed < 150) {
                         if (!buzzerOn) {
                             digitalWrite(BUZZER_PIN, HIGH);
                             buzzerOn = true;
@@ -133,8 +134,8 @@ void updateBuzzer() {
                         buzzerStateStartTime = currentTime;
                     }
                 } else {
-                    // Off phase (100ms)
-                    if (elapsed < 100) {
+                    // Off phase (150ms)
+                    if (elapsed < 150) {
                         if (buzzerOn) {
                             digitalWrite(BUZZER_PIN, LOW);
                             buzzerOn = false;
@@ -145,13 +146,14 @@ void updateBuzzer() {
                     }
                 }
             } else {
-                // Pause phase (2000ms)
+                // Long pause phase (5000ms = 5 seconds)
+                // This gives piezo buzzer time to cool down
                 if (buzzerOn) {
                     digitalWrite(BUZZER_PIN, LOW);
                     buzzerOn = false;
                 }
                 
-                if (elapsed >= 2000) {
+                if (elapsed >= 5000) {
                     // Restart pattern
                     buzzerStateStep = 0;
                     buzzerStateStartTime = currentTime;
