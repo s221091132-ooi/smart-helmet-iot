@@ -10,9 +10,7 @@
 enum BuzzerPattern {
     PATTERN_NONE,
     PATTERN_POWER_ON,
-    PATTERN_RESET_CONFIRM,
-    PATTERN_FALL_ALERT,
-    PATTERN_HIGH_TEMP_ALERT
+    PATTERN_FALL_ALERT
 };
 
 // Buzzer state management
@@ -20,7 +18,6 @@ BuzzerPattern currentPattern = PATTERN_NONE;
 unsigned long buzzerStateStartTime = 0;
 int buzzerStateStep = 0;
 bool buzzerOn = false;
-bool locationResetReceived = false;
 
 // Forward declarations
 const char* getBuzzerPatternString();
@@ -36,30 +33,18 @@ void initializeBuzzer() {
     buzzerStateStartTime = 0;
     buzzerStateStep = 0;
     buzzerOn = false;
-    locationResetReceived = false;
     
     Serial.println("Buzzer system initialized");
 }
 
-// Start power-on pattern (3 beeps with 5-second rest, repeat until reset)
+// Start power-on pattern (continuous long beep until button pressed)
 void startPowerOnPattern() {
     currentPattern = PATTERN_POWER_ON;
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
     Serial.println("🔔 BUZZER: Starting power-on pattern");
-    Serial.println("    Pattern: TIT-TIT-TIT (3 beeps) + 5 sec rest (repeat)");
-    Serial.println("    Note: Long rest prevents piezo buzzer thermal shutdown");
-    Serial.println("    Press RESET BUTTON to stop");
-}
-
-// Start reset confirmation pattern (3 fast beeps + long beep: TIT-TIT-TIT-TIIIIT)
-void startResetConfirmPattern() {
-    currentPattern = PATTERN_RESET_CONFIRM;
-    buzzerStateStartTime = millis();
-    buzzerStateStep = 0;
-    locationResetReceived = true;
-    Serial.println("🔔 BUZZER: Starting reset confirmation pattern");
-    Serial.println("    Pattern: TIT-TIT-TIT-TIIIIT (3 fast + 1 long)");
+    Serial.println("    Pattern: TIIIIIIIIT (continuous long beep)");
+    Serial.println("    Note: Will not stop until reset button (GPIO 27) is pressed");
 }
 
 // Start fall alert pattern (continuous beeping)
@@ -69,17 +54,6 @@ void startFallAlertPattern() {
     buzzerStateStep = 0;
     digitalWrite(LED_PIN, HIGH);  // Turn on LED
     Serial.println("BUZZER: Starting fall alert pattern");
-}
-
-// Start high temperature alert pattern (continuous long beeps: TIIIIT-TIIIIT-TIIIIT)
-void startHighTempAlertPattern() {
-    currentPattern = PATTERN_HIGH_TEMP_ALERT;
-    buzzerStateStartTime = millis();
-    buzzerStateStep = 0;
-    digitalWrite(LED_PIN, HIGH);  // Turn on LED
-    Serial.println("🔔 BUZZER: Starting high temperature alert pattern");
-    Serial.println("    Pattern: TIIIIT-TIIIIT-TIIIIT (continuous long beeps)");
-    Serial.println("    Reason: Temperature exceeded 35°C!");
 }
 
 // Stop any buzzer pattern
@@ -100,11 +74,6 @@ void stopBuzzer() {
     buzzerOn = false;
 }
 
-// Check if location reset has been received
-bool isLocationResetReceived() {
-    return locationResetReceived;
-}
-
 // Update buzzer state machine (call this in main loop)
 void updateBuzzer() {
     unsigned long currentTime = millis();
@@ -116,134 +85,15 @@ void updateBuzzer() {
             break;
             
         case PATTERN_POWER_ON:
-            // Power-on pattern: 3 beeps (150ms on, 150ms off), then 5 second pause, repeat
-            // Longer rest period to prevent piezo buzzer thermal shutdown
-            // Steps: 0=beep1_on, 1=beep1_off, 2=beep2_on, 3=beep2_off, 4=beep3_on, 5=beep3_off, 6=pause
+            // Power-on pattern: continuous long beep (does not stop automatically)
+            // Only stops when reset button is pressed
             
-            if (buzzerStateStep < 6) {
-                // Beeping phase (3 beeps only)
-                if (buzzerStateStep % 2 == 0) {
-                    // On phase (150ms - slightly longer for better sound)
-                    if (elapsed < 150) {
-                        if (!buzzerOn) {
-                            digitalWrite(BUZZER_PIN, HIGH);
-                            buzzerOn = true;
-                        }
-                    } else {
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                } else {
-                    // Off phase (150ms)
-                    if (elapsed < 150) {
-                        if (buzzerOn) {
-                            digitalWrite(BUZZER_PIN, LOW);
-                            buzzerOn = false;
-                        }
-                    } else {
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                }
-            } else {
-                // Long pause phase (5000ms = 5 seconds)
-                // This gives piezo buzzer time to cool down
-                if (buzzerOn) {
-                    digitalWrite(BUZZER_PIN, LOW);
-                    buzzerOn = false;
-                }
-                
-                if (elapsed >= 5000) {
-                    // Restart pattern
-                    buzzerStateStep = 0;
-                    buzzerStateStartTime = currentTime;
-                }
+            if (!buzzerOn) {
+                digitalWrite(BUZZER_PIN, HIGH);
+                digitalWrite(LED_PIN, HIGH);
+                buzzerOn = true;
             }
-            break;
-            
-        case PATTERN_RESET_CONFIRM:
-            // Reset confirmation: 3 fast beeps + 1 long beep
-            // beep (100ms), pause (100ms), beep (100ms), pause (100ms), beep (100ms), pause (100ms), beeeep (500ms)
-            // Steps: 0=beep1_on, 1=pause1, 2=beep2_on, 3=pause2, 4=beep3_on, 5=pause3, 6=long_beep, 7=done
-            
-            switch (buzzerStateStep) {
-                case 0:  // First beep (100ms)
-                    if (!buzzerOn) {
-                        digitalWrite(BUZZER_PIN, HIGH);
-                        buzzerOn = true;
-                    }
-                    if (elapsed >= 100) {
-                        digitalWrite(BUZZER_PIN, LOW);
-                        buzzerOn = false;
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 1:  // First pause (100ms)
-                    if (elapsed >= 100) {
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 2:  // Second beep (100ms)
-                    if (!buzzerOn) {
-                        digitalWrite(BUZZER_PIN, HIGH);
-                        buzzerOn = true;
-                    }
-                    if (elapsed >= 100) {
-                        digitalWrite(BUZZER_PIN, LOW);
-                        buzzerOn = false;
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 3:  // Second pause (100ms)
-                    if (elapsed >= 100) {
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 4:  // Third beep (100ms)
-                    if (!buzzerOn) {
-                        digitalWrite(BUZZER_PIN, HIGH);
-                        buzzerOn = true;
-                    }
-                    if (elapsed >= 100) {
-                        digitalWrite(BUZZER_PIN, LOW);
-                        buzzerOn = false;
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 5:  // Third pause (100ms)
-                    if (elapsed >= 100) {
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 6:  // Long beep (500ms)
-                    if (!buzzerOn) {
-                        digitalWrite(BUZZER_PIN, HIGH);
-                        buzzerOn = true;
-                    }
-                    if (elapsed >= 500) {
-                        digitalWrite(BUZZER_PIN, LOW);
-                        buzzerOn = false;
-                        buzzerStateStep++;
-                        buzzerStateStartTime = currentTime;
-                    }
-                    break;
-                    
-                case 7:  // Done
-                    stopBuzzer();
-                    break;
-            }
+            // Keep buzzer on continuously - no automatic stop
             break;
             
         case PATTERN_FALL_ALERT:
@@ -276,38 +126,6 @@ void updateBuzzer() {
                 }
             }
             break;
-            
-        case PATTERN_HIGH_TEMP_ALERT:
-            // High temperature alert: continuous long beeps (800ms on, 300ms off)
-            // Pattern: TIIIIT-pause-TIIIIT-pause-TIIIIT (repeat)
-            
-            if (buzzerStateStep == 0) {
-                // Long beep phase (800ms)
-                if (!buzzerOn) {
-                    digitalWrite(BUZZER_PIN, HIGH);
-                    digitalWrite(LED_PIN, HIGH);
-                    buzzerOn = true;
-                }
-                
-                if (elapsed >= 800) {
-                    digitalWrite(BUZZER_PIN, LOW);
-                    buzzerOn = false;
-                    buzzerStateStep = 1;
-                    buzzerStateStartTime = currentTime;
-                }
-            } else {
-                // Pause phase (300ms)
-                if (buzzerOn) {
-                    digitalWrite(BUZZER_PIN, LOW);
-                    buzzerOn = false;
-                }
-                
-                if (elapsed >= 300) {
-                    buzzerStateStep = 0;
-                    buzzerStateStartTime = currentTime;
-                }
-            }
-            break;
     }
 }
 
@@ -316,9 +134,7 @@ const char* getBuzzerPatternString() {
     switch (currentPattern) {
         case PATTERN_NONE: return "NONE";
         case PATTERN_POWER_ON: return "POWER_ON";
-        case PATTERN_RESET_CONFIRM: return "RESET_CONFIRM";
         case PATTERN_FALL_ALERT: return "FALL_ALERT";
-        case PATTERN_HIGH_TEMP_ALERT: return "HIGH_TEMP_ALERT";
         default: return "UNKNOWN";
     }
 }

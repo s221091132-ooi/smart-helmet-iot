@@ -13,7 +13,7 @@
 #define BATTERY_VOLTAGE_PIN 34   // Battery voltage sensor (analog) - YOUR ACTUAL WIRING
 #define BUZZER_PIN 25            // Buzzer output
 #define LED_PIN 26               // LED output
-#define RESET_BUTTON_PIN 27      // Reset location button (with pull-up)
+#define RESET_BUTTON_PIN 27      // Reset button (active LOW with internal pullup)
 
 // Battery configuration
 #define BATTERY_MAX_VOLTAGE 4.2  // Maximum LiPo voltage (fully charged)
@@ -102,8 +102,9 @@ bool initializeSensors() {
     digitalWrite(BUZZER_PIN, LOW);
     digitalWrite(LED_PIN, LOW);
     
-    // Initialize button pin with internal pull-up
+    // Initialize reset button (active LOW with internal pullup)
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+    Serial.println("Reset button configured on GPIO 27 (active LOW)");
     
     // Calibrate ACS712 current sensor (find zero-current offset)
     Serial.println("Calibrating ACS712 current sensor...");
@@ -287,52 +288,29 @@ bool isBatteryCritical() {
     return currentSensorData.batteryPercentage < 10;
 }
 
-// Check if temperature is critically high (35°C or above)
-bool isTemperatureHigh() {
-    return currentSensorData.temperature >= 35.0;  // Changed from > to >= (include 35.0°C)
-}
-
-// Check if reset button is pressed
-// Button connected between GPIO 27 and GND (using internal pull-up)
-// Returns true when button is pressed
+// Check if reset button is pressed (active LOW with debouncing)
 bool isResetButtonPressed() {
-    static unsigned long lastDebounceTime = 0;
     static bool lastButtonState = HIGH;
-    static bool buttonPressed = false;
-    const unsigned long debounceDelay = 50; // 50ms debounce
+    static unsigned long lastDebounceTime = 0;
+    const unsigned long DEBOUNCE_DELAY = 50;  // 50ms debounce
     
-    bool reading = digitalRead(RESET_BUTTON_PIN);
+    bool currentButtonState = digitalRead(RESET_BUTTON_PIN);
     
     // If button state changed, reset debounce timer
-    if (reading != lastButtonState) {
+    if (currentButtonState != lastButtonState) {
         lastDebounceTime = millis();
     }
     
-    // If button state has been stable for debounceDelay
-    if ((millis() - lastDebounceTime) > debounceDelay) {
-        // If button is pressed (LOW because of pull-up)
-        if (reading == LOW && !buttonPressed) {
-            buttonPressed = true;
-            Serial.println("\n════════════════════════════════════════");
-            Serial.println("🔘🔘🔘 PHYSICAL RESET BUTTON PRESSED! 🔘🔘🔘");
-            Serial.println("════════════════════════════════════════");
-            Serial.printf("    GPIO %d detected LOW signal\n", RESET_BUTTON_PIN);
-            Serial.printf("    Millis: %lu ms\n", millis());
-            Serial.println("    Action: Location will be reset to (0,0)");
-            Serial.println("    Buzzer: Will play confirmation sound");
-            Serial.println("════════════════════════════════════════\n");
-            return true;
-        }
-        // If button is released
-        if (reading == HIGH) {
-            if (buttonPressed) {
-                Serial.println("🔘 Reset button released");
-            }
-            buttonPressed = false;
+    // Check if button has been stable for debounce delay
+    if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+        // If button is pressed (LOW) and was not pressed before
+        if (currentButtonState == LOW && lastButtonState == HIGH) {
+            lastButtonState = currentButtonState;
+            return true;  // Button press detected
         }
     }
     
-    lastButtonState = reading;
+    lastButtonState = currentButtonState;
     return false;
 }
 

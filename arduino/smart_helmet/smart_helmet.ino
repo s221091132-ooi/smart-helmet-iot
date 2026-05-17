@@ -78,8 +78,8 @@ void setup() {
     Serial.println("\n=================================");
     Serial.println("SYSTEM READY");
     Serial.println("=================================");
-    Serial.println("\nBuzzer is beeping...");
-    Serial.println("Press the PHYSICAL RESET BUTTON (GPIO 27) to stop the buzzer.\n");
+    Serial.println("\n🔔 Buzzer is beeping continuously...");
+    Serial.println("📍 Press RESET BUTTON (GPIO 27) to stop the buzzer.\n");
     
     systemInitialized = true;
     lastDataSendTime = millis();
@@ -150,60 +150,20 @@ void loop() {
         }
     }
     
-    // Check for high temperature alert (above 35°C)
-    static bool highTempAlertActive = false;
-    if (isTemperatureHigh()) {
-        if (!highTempAlertActive) {
-            Serial.println("\n!!! ⚠️  HIGH TEMPERATURE ALERT ⚠️  !!!");
-            Serial.printf("Temperature: %.1f°C (Threshold: 35°C)\n", sensorData.temperature);
-            Serial.println("Starting temperature warning buzzer...\n");
-            highTempAlertActive = true;
-        }
-        
-        // Continuously maintain high temp alert buzzer (unless fall alert is active)
-        String currentPatternStr = String(getBuzzerPatternString());
-        if (currentPatternStr != "FALL_ALERT" && currentPatternStr != "HIGH_TEMP_ALERT") {
-            // If buzzer is not playing high temp alert, start it
-            startHighTempAlertPattern();
-        }
-    } else {
-        // Temperature back to normal, stop alert
-        if (highTempAlertActive) {
-            Serial.println("\n✅ Temperature back to normal range");
-            String currentPatternStr = String(getBuzzerPatternString());
-            if (currentPatternStr == "HIGH_TEMP_ALERT") {
-                stopBuzzer();
-            }
-            highTempAlertActive = false;
-        }
-    }
-    
-    // Check for hardware reset button press
+    // Check for reset button press (simple: just stop buzzer)
     if (isResetButtonPressed()) {
         Serial.println("\n════════════════════════════════════════");
-        Serial.println("🔘 HARDWARE BUTTON PRESSED (GPIO 27)!");
+        Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
         Serial.println("════════════════════════════════════════");
-        Serial.printf("   Millis: %lu ms\n", millis());
+        Serial.printf("   Time: %lu ms\n", millis());
         Serial.printf("   Previous buzzer pattern: %s\n", getBuzzerPatternString());
-        Serial.println("");
-        Serial.println("   Actions:");
-        Serial.println("   1. Stop current buzzer pattern");
-        Serial.println("   2. Reset location to (0,0)");
-        Serial.println("   3. Play confirmation sound");
-        Serial.println("   4. Send reset request to server");
+        Serial.println("   Action: Stopping buzzer...");
         Serial.println("════════════════════════════════════════\n");
         
-        // Stop power-on buzzer pattern
+        // Stop buzzer - simple and clean
         stopBuzzer();
         
-        // Reset location to origin
-        resetLocation();
-        
-        // Play reset confirmation pattern (3 fast beeps + long beep)
-        startResetConfirmPattern();
-        
-        Serial.println("✅ Location reset to (0, 0)");
-        Serial.println("🔔 Playing confirmation sound: TIT-TIT-TIT-TIIIIT\n");
+        Serial.println("✅ Buzzer stopped!\n");
     }
     
     // Send data to server at specified interval
