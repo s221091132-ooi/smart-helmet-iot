@@ -180,9 +180,18 @@ void loop() {
     
     // Check for hardware reset button press
     if (isResetButtonPressed()) {
-        Serial.println("\n=================================");
-        Serial.println("HARDWARE BUTTON: LOCATION RESET!");
-        Serial.println("=================================\n");
+        Serial.println("\n════════════════════════════════════════");
+        Serial.println("🔘 HARDWARE BUTTON PRESSED (GPIO 27)!");
+        Serial.println("════════════════════════════════════════");
+        Serial.printf("   Millis: %lu ms\n", millis());
+        Serial.printf("   Previous buzzer pattern: %s\n", getBuzzerPatternString());
+        Serial.println("");
+        Serial.println("   Actions:");
+        Serial.println("   1. Stop current buzzer pattern");
+        Serial.println("   2. Reset location to (0,0)");
+        Serial.println("   3. Play confirmation sound");
+        Serial.println("   4. Send reset request to server");
+        Serial.println("════════════════════════════════════════\n");
         
         // Stop power-on buzzer pattern
         stopBuzzer();
@@ -193,8 +202,8 @@ void loop() {
         // Play reset confirmation pattern (3 fast beeps + long beep)
         startResetConfirmPattern();
         
-        Serial.println("Location reset to (0, 0)");
-        Serial.println("Buzzer: 3 fast beeps + long beep confirmation");
+        Serial.println("✅ Location reset to (0, 0)");
+        Serial.println("🔔 Playing confirmation sound: TIT-TIT-TIT-TIIIIT\n");
     }
     
     // Send data to server at specified interval
@@ -205,13 +214,17 @@ void loop() {
             
             // Check if location reset was requested by server
             if (resetRequested && !isLocationResetReceived()) {
-                Serial.println("\n=================================");
-                Serial.println("📡 LOCATION RESET RECEIVED FROM SERVER!");
-                Serial.println("=================================");
-                Serial.println("Explanation: Dashboard 'Reset Location' button was clicked");
-                Serial.println("Or reset timestamp found in database (< 10 seconds old)");
-                Serial.println("NOTE: This does NOT stop the power-on buzzer!");
-                Serial.println("Only the PHYSICAL BUTTON (GPIO 27) stops the buzzer.\n");
+                Serial.println("\n════════════════════════════════════════");
+                Serial.println("📡 SERVER SAYS: LOCATION RESET DETECTED!");
+                Serial.println("════════════════════════════════════════");
+                Serial.printf("   Millis: %lu ms\n", millis());
+                Serial.println("   Source: Database 'last_reset_at' < 3 seconds ago");
+                Serial.println("   Explanation: Someone clicked 'Reset Location' on website");
+                Serial.println("   ⚠️  OR: Old timestamp from previous session!");
+                Serial.println("");
+                Serial.println("   📍 Action: Resetting location to (0,0)");
+                Serial.println("   🔔 Buzzer: NOT affected (physical button only!)");
+                Serial.println("════════════════════════════════════════\n");
                 
                 // Reset location to origin (but don't stop buzzer)
                 resetLocation();

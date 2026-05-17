@@ -138,11 +138,29 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
         
         if (!error && responseDoc.containsKey("reset_location")) {
             bool shouldReset = responseDoc["reset_location"];
+            Serial.println("\n────────────────────────────────────────");
+            Serial.println("📡 SERVER RESPONSE ANALYSIS:");
+            Serial.println("────────────────────────────────────────");
+            Serial.printf("   reset_location flag: %s\n", shouldReset ? "TRUE" : "FALSE");
+            
             if (shouldReset) {
-                Serial.println("Server requested location reset!");
+                Serial.println("   ⚠️  Server is requesting location reset!");
+                Serial.println("   Reason: last_reset_at timestamp < 3 seconds old");
+                Serial.println("   This will trigger ESP32 to call resetLocation()");
+                Serial.println("────────────────────────────────────────\n");
                 http.end();
                 return true;  // Signal that reset was requested
+            } else {
+                Serial.println("   ✅ No reset requested (normal operation)");
+                Serial.println("────────────────────────────────────────\n");
             }
+        } else {
+            if (error) {
+                Serial.printf("   ⚠️  JSON parse error: %s\n", error.c_str());
+            } else {
+                Serial.println("   ℹ️  No reset_location field in response");
+            }
+            Serial.println("────────────────────────────────────────\n");
         }
         
         http.end();

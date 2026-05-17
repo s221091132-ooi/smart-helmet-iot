@@ -313,9 +313,14 @@ bool isResetButtonPressed() {
         // If button is pressed (LOW because of pull-up)
         if (reading == LOW && !buttonPressed) {
             buttonPressed = true;
-            Serial.println("\n🔘🔘🔘 RESET BUTTON PRESSED! 🔘🔘🔘");
+            Serial.println("\n════════════════════════════════════════");
+            Serial.println("🔘🔘🔘 PHYSICAL RESET BUTTON PRESSED! 🔘🔘🔘");
+            Serial.println("════════════════════════════════════════");
             Serial.printf("    GPIO %d detected LOW signal\n", RESET_BUTTON_PIN);
-            Serial.println("    Action: Location will be reset");
+            Serial.printf("    Millis: %lu ms\n", millis());
+            Serial.println("    Action: Location will be reset to (0,0)");
+            Serial.println("    Buzzer: Will play confirmation sound");
+            Serial.println("════════════════════════════════════════\n");
             return true;
         }
         // If button is released

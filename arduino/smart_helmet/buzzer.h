@@ -84,9 +84,14 @@ void startHighTempAlertPattern() {
 // Stop any buzzer pattern
 void stopBuzzer() {
     if (currentPattern != PATTERN_NONE) {
-        Serial.println("⛔ BUZZER: Stopping...");
+        Serial.println("\n════════════════════════════════════════");
+        Serial.println("⛔ BUZZER: STOPPING...");
+        Serial.println("════════════════════════════════════════");
         Serial.printf("   Previous pattern: %s\n", getBuzzerPatternString());
-        Serial.println("   Reason: stopBuzzer() called");
+        Serial.printf("   Millis: %lu ms\n", millis());
+        Serial.println("   Reason: stopBuzzer() function called");
+        Serial.println("   ⚠️  CHECK CALL STACK TO SEE WHO CALLED THIS!");
+        Serial.println("════════════════════════════════════════\n");
     }
     currentPattern = PATTERN_NONE;
     digitalWrite(BUZZER_PIN, LOW);
