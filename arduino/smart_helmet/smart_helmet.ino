@@ -150,20 +150,19 @@ void loop() {
         }
     }
     
-    // Check for reset button press (simple: just stop buzzer)
+    // Stop buzzer when reset button is pressed (GPIO 27, active LOW)
+    // Same logic as standalone test: if (buttonState == LOW) → stop
+    static bool buzzerStoppedByButton = false;
     if (isResetButtonPressed()) {
-        Serial.println("\n════════════════════════════════════════");
-        Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
-        Serial.println("════════════════════════════════════════");
-        Serial.printf("   Time: %lu ms\n", millis());
-        Serial.printf("   Previous buzzer pattern: %s\n", getBuzzerPatternString());
-        Serial.println("   Action: Stopping buzzer...");
-        Serial.println("════════════════════════════════════════\n");
-        
-        // Stop buzzer - simple and clean
-        stopBuzzer();
-        
-        Serial.println("✅ Buzzer stopped!\n");
+        if (!buzzerStoppedByButton) {
+            Serial.println("\n════════════════════════════════════════");
+            Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
+            Serial.println("   Stopping buzzer...");
+            Serial.println("════════════════════════════════════════\n");
+            stopBuzzer();
+            buzzerStoppedByButton = true;
+            Serial.println("✅ Buzzer stopped!\n");
+        }
     }
     
     // Send data to server at specified interval

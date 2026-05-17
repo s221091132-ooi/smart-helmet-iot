@@ -288,41 +288,10 @@ bool isBatteryCritical() {
     return currentSensorData.batteryPercentage < 10;
 }
 
-// Check if reset button is pressed (active LOW with debouncing)
+// Read reset button (active LOW with INPUT_PULLUP)
+// Returns true while button is physically pressed
 bool isResetButtonPressed() {
-    static bool lastButtonState = HIGH;
-    static unsigned long lastDebounceTime = 0;
-    const unsigned long DEBOUNCE_DELAY = 50;  // 50ms debounce
-    
-    bool currentButtonState = digitalRead(RESET_BUTTON_PIN);
-    
-    // Debug: Print button state every second
-    static unsigned long lastDebugPrint = 0;
-    if (millis() - lastDebugPrint > 1000) {
-        Serial.printf("DEBUG: Button state = %s (HIGH=not pressed, LOW=pressed)\n", 
-                      currentButtonState == HIGH ? "HIGH" : "LOW");
-        lastDebugPrint = millis();
-    }
-    
-    // If button state changed, reset debounce timer
-    if (currentButtonState != lastButtonState) {
-        lastDebounceTime = millis();
-        Serial.printf("DEBUG: Button state changed to %s\n", 
-                      currentButtonState == HIGH ? "HIGH" : "LOW");
-    }
-    
-    // Check if button has been stable for debounce delay
-    if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
-        // If button is pressed (LOW) and was not pressed before
-        if (currentButtonState == LOW && lastButtonState == HIGH) {
-            lastButtonState = currentButtonState;
-            Serial.println("DEBUG: ✅ Button PRESS detected!");
-            return true;  // Button press detected
-        }
-    }
-    
-    lastButtonState = currentButtonState;
-    return false;
+    return digitalRead(RESET_BUTTON_PIN) == LOW;
 }
 
 // Get current sensor data
