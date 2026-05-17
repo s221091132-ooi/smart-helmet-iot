@@ -219,15 +219,12 @@ void loop() {
 void testBuzzerPatterns() {
     Serial.println("Testing buzzer patterns...");
     
-    Serial.println("Testing power-on pattern (5 seconds)...");
+    Serial.println("Testing power-on pattern (continuous beep)...");
+    Serial.println("Note: Will beep continuously until you press GPIO27 button");
     startPowerOnPattern();
     delay(5000);
     stopBuzzer();
     delay(1000);
-    
-    Serial.println("Testing reset confirmation pattern...");
-    startResetConfirmPattern();
-    delay(3000);
     
     Serial.println("Testing fall alert pattern (3 seconds)...");
     startFallAlertPattern();
