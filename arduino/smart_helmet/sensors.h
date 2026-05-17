@@ -7,6 +7,13 @@
 #include <Wire.h>
 #include <MPU9250.h>
 
+// Reset button interrupt flag (short presses missed while HTTP blocks loop)
+volatile bool g_resetButtonInterrupt = false;
+
+void IRAM_ATTR onResetButtonInterrupt() {
+    g_resetButtonInterrupt = true;
+}
+
 // Pin definitions
 #define LM35_PIN 32              // LM35 temperature sensor (analog) - CHANGED from pin 4 to 32 (more stable)
 #define ACS712_PIN 35            // ACS712 current sensor (analog) - MOVED from 34 to 35
@@ -104,7 +111,8 @@ bool initializeSensors() {
     
     // Initialize reset button (active LOW with internal pullup)
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
-    Serial.println("Reset button configured on GPIO 27 (active LOW)");
+    attachInterrupt(digitalPinToInterrupt(RESET_BUTTON_PIN), onResetButtonInterrupt, FALLING);
+    Serial.println("Reset button configured on GPIO 27 (active LOW, interrupt on press)");
     
     // Calibrate ACS712 current sensor (find zero-current offset)
     Serial.println("Calibrating ACS712 current sensor...");
@@ -292,6 +300,15 @@ bool isBatteryCritical() {
 // Returns true while button is physically pressed
 bool isResetButtonPressed() {
     return digitalRead(RESET_BUTTON_PIN) == LOW;
+}
+
+// True on short tap (interrupt) or while held (poll backup)
+bool wasResetButtonTriggered() {
+    if (g_resetButtonInterrupt) {
+        g_resetButtonInterrupt = false;
+        return true;
+    }
+    return isResetButtonPressed();
 }
 
 // Get current sensor data

@@ -36,6 +36,21 @@ const unsigned long SERIAL_PRINT_INTERVAL = 5000;  // Print debug info every 5 s
 // System state
 bool systemInitialized = false;
 bool locationResetAcknowledged = false;
+static bool buzzerStoppedByButton = false;
+
+// Stop power-on buzzer on GPIO 27 tap (interrupt catches short presses during HTTP)
+void handleResetButtonBuzzerStop() {
+    if (buzzerStoppedByButton) return;
+    if (!wasResetButtonTriggered()) return;
+
+    Serial.println("\n════════════════════════════════════════");
+    Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
+    Serial.println("   Stopping buzzer...");
+    Serial.println("════════════════════════════════════════\n");
+    stopBuzzer();
+    buzzerStoppedByButton = true;
+    Serial.println("✅ Buzzer stopped!\n");
+}
 
 void setup() {
     // Initialize Serial communication
@@ -90,6 +105,9 @@ void loop() {
     if (!systemInitialized) return;
     
     unsigned long currentTime = millis();
+    
+    // Check button first (before any blocking work)
+    handleResetButtonBuzzerStop();
     
     // Update buzzer state machine
     updateBuzzer();
@@ -150,26 +168,13 @@ void loop() {
         }
     }
     
-    // Stop buzzer when reset button is pressed (GPIO 27, active LOW)
-    // Same logic as standalone test: if (buttonState == LOW) → stop
-    static bool buzzerStoppedByButton = false;
-    if (isResetButtonPressed()) {
-        if (!buzzerStoppedByButton) {
-            Serial.println("\n════════════════════════════════════════");
-            Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
-            Serial.println("   Stopping buzzer...");
-            Serial.println("════════════════════════════════════════\n");
-            stopBuzzer();
-            buzzerStoppedByButton = true;
-            Serial.println("✅ Buzzer stopped!\n");
-        }
-    }
-    
     // Send data to server at specified interval
     if (currentTime - lastDataSendTime >= DATA_SEND_INTERVAL) {
+        handleResetButtonBuzzerStop();
         if (isWiFiConnected()) {
             // Send sensor data
             bool resetRequested = sendSensorData(sensorData, locationData);
+            handleResetButtonBuzzerStop();
             
             // ⚠️  SERVER-SIDE RESET DISABLED FOR BUZZER CONTROL
             // Server can only suggest location reset, NOT control buzzer
