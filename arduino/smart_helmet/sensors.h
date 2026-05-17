@@ -42,6 +42,8 @@ float ACS712_OFFSET = 2.5;        // Offset voltage at zero current (will be cal
 
 // MPU9250 sensor object
 MPU9250 mpu;
+bool mpuInitialized = false;
+bool mpuHasFreshData = false;
 
 // Sensor data structure
 struct SensorData {
@@ -59,15 +61,15 @@ struct SensorData {
     int16_t accelY;
     int16_t accelZ;
     
-    // Gyroscope (raw values)
-    int16_t gyroX;
-    int16_t gyroY;
-    int16_t gyroZ;
+    // Gyroscope (degrees per second from MPU9250 library)
+    float gyroX;
+    float gyroY;
+    float gyroZ;
     
-    // Magnetometer (for heading)
-    int16_t magX;
-    int16_t magY;
-    int16_t magZ;
+    // Magnetometer (microtesla, for heading)
+    float magX;
+    float magY;
+    float magZ;
     
     // Acceleration magnitude (calculated)
     float accelMagnitude;
@@ -86,15 +88,20 @@ bool initializeSensors() {
     // Initialize MPU9250
     if (!mpu.setup(0x68)) {  // 0x68 is default MPU9250 address
         Serial.println("ERROR: MPU9250 initialization failed!");
+        mpuInitialized = false;
         success = false;
     } else {
+        mpuInitialized = true;
         Serial.println("MPU9250 initialized successfully");
         
-        // Calibrate gyroscope and accelerometer
         delay(2000);
-        Serial.println("Calibrating MPU9250...");
+        Serial.println("Calibrating accelerometer + gyro (keep helmet still)...");
         mpu.calibrateAccelGyro();
-        Serial.println("MPU9250 calibration complete");
+        Serial.println("Accel/gyro calibration complete");
+        
+        Serial.println("Calibrating magnetometer — rotate helmet slowly in figure-8 for 15 sec...");
+        mpu.calibrateMag();
+        Serial.println("Magnetometer calibration complete");
     }
     
     // Initialize analog pins for temperature and current sensors
@@ -227,27 +234,31 @@ float readTemperature() {
 
 // Read MPU9250 accelerometer, gyroscope, and magnetometer
 void readMPU9250() {
+    if (!mpuInitialized) {
+        mpuHasFreshData = false;
+        return;
+    }
     if (mpu.update()) {
-        // Read accelerometer (convert to raw 16-bit values for consistency)
-        currentSensorData.accelX = (int16_t)(mpu.getAccX() * 16384);  // Scale to ±2g range
+        mpuHasFreshData = true;
+        // Accelerometer as raw 16-bit (±2g) for API compatibility
+        currentSensorData.accelX = (int16_t)(mpu.getAccX() * 16384);
         currentSensorData.accelY = (int16_t)(mpu.getAccY() * 16384);
         currentSensorData.accelZ = (int16_t)(mpu.getAccZ() * 16384);
         
-        // Read gyroscope (convert to raw 16-bit values)
-        currentSensorData.gyroX = (int16_t)(mpu.getGyroX() * 131);  // Scale to ±250°/s range
-        currentSensorData.gyroY = (int16_t)(mpu.getGyroY() * 131);
-        currentSensorData.gyroZ = (int16_t)(mpu.getGyroZ() * 131);
+        // Gyro deg/s and magnetometer uT — use library units directly (no double scaling)
+        currentSensorData.gyroX = mpu.getGyroX();
+        currentSensorData.gyroY = mpu.getGyroY();
+        currentSensorData.gyroZ = mpu.getGyroZ();
+        currentSensorData.magX = mpu.getMagX();
+        currentSensorData.magY = mpu.getMagY();
+        currentSensorData.magZ = mpu.getMagZ();
         
-        // Read magnetometer
-        currentSensorData.magX = (int16_t)mpu.getMagX();
-        currentSensorData.magY = (int16_t)mpu.getMagY();
-        currentSensorData.magZ = (int16_t)mpu.getMagZ();
-        
-        // Calculate acceleration magnitude in m/s²
-        float ax = mpu.getAccX() * 9.81;  // Convert g to m/s²
+        float ax = mpu.getAccX() * 9.81;
         float ay = mpu.getAccY() * 9.81;
         float az = mpu.getAccZ() * 9.81;
-        currentSensorData.accelMagnitude = sqrt(ax*ax + ay*ay + az*az);
+        currentSensorData.accelMagnitude = sqrt(ax * ax + ay * ay + az * az);
+    } else {
+        mpuHasFreshData = false;
     }
 }
 
@@ -280,11 +291,11 @@ void printSensorData() {
                   currentSensorData.accelY,
                   currentSensorData.accelZ,
                   currentSensorData.accelMagnitude);
-    Serial.printf("Gyro: X=%d Y=%d Z=%d\n",
+    Serial.printf("Gyro: X=%.1f Y=%.1f Z=%.1f deg/s\n",
                   currentSensorData.gyroX,
                   currentSensorData.gyroY,
                   currentSensorData.gyroZ);
-    Serial.printf("Mag: X=%d Y=%d Z=%d\n",
+    Serial.printf("Mag: X=%.1f Y=%.1f Z=%.1f uT (heading needs non-zero mag)\n",
                   currentSensorData.magX,
                   currentSensorData.magY,
                   currentSensorData.magZ);

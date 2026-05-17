@@ -7,8 +7,9 @@
 #include "sensors.h"
 #include <math.h>
 
-// Step detection configuration
-#define STEP_THRESHOLD 11.8         // 1.2g in m/s² (vertical acceleration for step)
+// Step detection: total accel magnitude peak above rest (~9.81 m/s²)
+#define STEP_PEAK_THRESHOLD 11.2f   // m/s² — walking impact on magnitude
+#define STEP_MIN_MAG 8.0f           // uT — minimum horizontal mag field for heading
 #define STEP_LENGTH 0.7             // Average step length in meters
 #define STEP_MIN_INTERVAL 300       // Minimum time between steps (ms) - prevents double counting
 #define SMOOTHING_ALPHA 0.3         // Low-pass filter coefficient
@@ -51,11 +52,11 @@ struct LocationData {
 LocationData location;
 
 // Step detection state
-float lastVerticalAccel = 0;
-float smoothedVerticalAccel = 0;
-bool stepDetected = false;
+float lastAccelMag = 9.81f;
+float smoothedAccelMag = 9.81f;
 unsigned long lastStepTime = 0;
 unsigned long lastUpdateTime = 0;
+bool headingInitialized = false;
 
 // Heading calculation state
 float headingFromMag = 0;
@@ -72,10 +73,13 @@ void initializeLocationTracking() {
     location.stepCount = 0;
     location.direction = "N";
     
-    lastVerticalAccel = 0;
-    smoothedVerticalAccel = 0;
-    lastStepTime = millis();
+    lastAccelMag = 9.81f;
+    smoothedAccelMag = 9.81f;
+    lastStepTime = 0;
     lastUpdateTime = millis();
+    headingInitialized = false;
+    headingFromGyro = 0.0f;
+    headingFromMag = 0.0f;
     
     Serial.println("Location tracking initialized at origin (0, 0)");
 }
@@ -91,77 +95,85 @@ void resetLocation() {
     location.stepCount = 0;
     location.direction = "N";
     
-    lastVerticalAccel = 0;
-    smoothedVerticalAccel = 0;
-    lastStepTime = millis();
+    lastAccelMag = 9.81f;
+    smoothedAccelMag = 9.81f;
+    lastStepTime = 0;
     lastUpdateTime = millis();
+    headingInitialized = false;
+    headingFromGyro = 0.0f;
+    headingFromMag = 0.0f;
     
     Serial.println("Location reset to origin (0, 0), altitude 0 m");
 }
 
-// Low-pass filter for smoothing vertical acceleration
-float smoothVerticalAcceleration(float newAccel) {
-    smoothedVerticalAccel = SMOOTHING_ALPHA * newAccel + (1 - SMOOTHING_ALPHA) * smoothedVerticalAccel;
-    return smoothedVerticalAccel;
-}
-
-// Detect steps from vertical acceleration
-bool detectStep(float verticalAccel) {
-    unsigned long currentTime = millis();
-    
-    // Smooth the acceleration
-    float smoothed = smoothVerticalAcceleration(verticalAccel);
-    
-    // Detect peak (step) when crossing threshold and sufficient time has passed
-    bool isPeak = (smoothed > STEP_THRESHOLD) && (lastVerticalAccel <= STEP_THRESHOLD);
-    bool enoughTimePassed = (currentTime - lastStepTime) >= STEP_MIN_INTERVAL;
-    
-    if (isPeak && enoughTimePassed) {
-        lastStepTime = currentTime;
-        lastVerticalAccel = smoothed;
-        return true;
-    }
-    
-    lastVerticalAccel = smoothed;
-    return false;
-}
-
-// Calculate heading from magnetometer
-float calculateMagnetometerHeading(int16_t magX, int16_t magY) {
-    // Calculate heading using atan2
-    float heading = atan2(magY, magX) * 180.0 / PI;
-    
-    // Apply magnetic declination
-    heading += MAG_DECLINATION;
-    
-    // Normalize to 0-360 degrees
-    if (heading < 0) heading += 360.0;
-    if (heading >= 360.0) heading -= 360.0;
-    
+float normalizeHeading(float heading) {
+    while (heading < 0.0f) heading += 360.0f;
+    while (heading >= 360.0f) heading -= 360.0f;
     return heading;
 }
 
-// Update heading using complementary filter (gyro + magnetometer)
-void updateHeading(int16_t gyroZ, int16_t magX, int16_t magY, float deltaTime) {
-    // Convert gyro raw value to degrees per second
-    float gyroRate = gyroZ / 131.0;  // For ±250°/s range
+// Shortest signed difference a - b in degrees
+float headingDelta(float a, float b) {
+    float diff = normalizeHeading(a - b);
+    if (diff > 180.0f) diff -= 360.0f;
+    return diff;
+}
+
+float smoothAccelMagnitude(float magnitude) {
+    smoothedAccelMag = SMOOTHING_ALPHA * magnitude + (1.0f - SMOOTHING_ALPHA) * smoothedAccelMag;
+    return smoothedAccelMag;
+}
+
+// Detect steps from total acceleration magnitude (works when helmet tilts)
+bool detectStep(float accelMagnitude) {
+    unsigned long currentTime = millis();
+    float smoothed = smoothAccelMagnitude(accelMagnitude);
     
-    // Integrate gyroscope (dead reckoning)
-    headingFromGyro += gyroRate * deltaTime;
+    bool isPeak = (smoothed > STEP_PEAK_THRESHOLD) && (lastAccelMag <= STEP_PEAK_THRESHOLD);
+    bool enoughTimePassed = (lastStepTime == 0) || ((currentTime - lastStepTime) >= STEP_MIN_INTERVAL);
     
-    // Normalize gyro heading
-    if (headingFromGyro < 0) headingFromGyro += 360.0;
-    if (headingFromGyro >= 360.0) headingFromGyro -= 360.0;
+    if (isPeak && enoughTimePassed) {
+        if (lastStepTime > 0) {
+            unsigned long intervalMs = currentTime - lastStepTime;
+            if (intervalMs >= STEP_MIN_INTERVAL && intervalMs <= 2500) {
+                float intervalSec = intervalMs / 1000.0f;
+                location.speed = (STEP_LENGTH / intervalSec) * 3.6f;
+                if (location.speed > 12.0f) location.speed = 12.0f;
+            }
+        }
+        lastStepTime = currentTime;
+        lastAccelMag = smoothed;
+        return true;
+    }
     
-    // Get heading from magnetometer
-    headingFromMag = calculateMagnetometerHeading(magX, magY);
+    lastAccelMag = smoothed;
+    return false;
+}
+
+float calculateMagnetometerHeading(float magX, float magY) {
+    float heading = atan2(magY, magX) * 180.0f / PI;
+    heading += MAG_DECLINATION;
+    return normalizeHeading(heading);
+}
+
+// Complementary filter: gyro Z yaw + magnetometer (when field is valid)
+void updateHeading(float gyroZDegPerSec, float magX, float magY, float deltaTime) {
+    headingFromGyro = normalizeHeading(headingFromGyro + gyroZDegPerSec * deltaTime);
     
-    // Complementary filter: combine gyro (short-term) with magnetometer (long-term)
-    location.heading = COMPLEMENTARY_FILTER_ALPHA * headingFromGyro + 
-                       (1 - COMPLEMENTARY_FILTER_ALPHA) * headingFromMag;
+    float magHoriz = sqrt(magX * magX + magY * magY);
+    if (magHoriz >= STEP_MIN_MAG) {
+        headingFromMag = calculateMagnetometerHeading(magX, magY);
+        if (!headingInitialized) {
+            headingFromGyro = headingFromMag;
+            headingInitialized = true;
+        }
+        float diff = headingDelta(headingFromMag, headingFromGyro);
+        headingFromGyro = normalizeHeading(
+            headingFromGyro + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * diff
+        );
+    }
     
-    // Update gyro heading with filtered result to prevent drift
-    headingFromGyro = location.heading;
+    location.heading = headingFromGyro;
 }
 
 // Convert heading to cardinal direction
@@ -206,19 +218,10 @@ void updatePosition() {
     location.stepCount++;
 }
 
-// Calculate speed based on step frequency
+// Decay speed to zero when no steps detected recently
 void updateSpeed() {
-    unsigned long currentTime = millis();
-    unsigned long timeSinceLastStep = currentTime - lastStepTime;
-    
-    if (timeSinceLastStep < 2000) {  // If stepped within last 2 seconds
-        // Speed = distance / time
-        float stepsPerSecond = 1000.0 / timeSinceLastStep;
-        float metersPerSecond = stepsPerSecond * STEP_LENGTH;
-        location.speed = metersPerSecond * 3.6;  // Convert m/s to km/h
-    } else {
-        // No recent steps, speed is zero
-        location.speed = 0.0;
+    if (lastStepTime == 0 || (millis() - lastStepTime) > 2000) {
+        location.speed = 0.0f;
     }
 }
 
@@ -242,25 +245,22 @@ void updateAltitude(float accelZ, float deltaTime) {
 
 // Main location tracking update (call this in main loop)
 void updateLocationTracking(SensorData sensorData) {
+    if (!mpuHasFreshData) return;
+    
     unsigned long currentTime = millis();
-    float deltaTime = (currentTime - lastUpdateTime) / 1000.0;  // Convert to seconds
+    float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
     
-    if (deltaTime <= 0) return;  // Skip if no time has passed
+    if (deltaTime <= 0.0f) return;
+    if (deltaTime > 0.5f) deltaTime = 0.05f;  // cap after long blocking loops
     
-    // Update heading using gyro and magnetometer
     updateHeading(sensorData.gyroZ, sensorData.magX, sensorData.magY, deltaTime);
-    
-    // Update direction string
     location.direction = headingToDirection(location.heading);
     
-    // Detect steps from vertical acceleration
-    float verticalAccel = sqrt(sensorData.accelZ * sensorData.accelZ) / 16384.0 * 9.81;
-    if (detectStep(verticalAccel)) {
+    if (detectStep(sensorData.accelMagnitude)) {
         Serial.println("LOCATION: Step detected!");
         updatePosition();
     }
     
-    // Update speed
     updateSpeed();
     
     // Update altitude
