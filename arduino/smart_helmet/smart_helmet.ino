@@ -212,25 +212,19 @@ void loop() {
             // Send sensor data
             bool resetRequested = sendSensorData(sensorData, locationData);
             
-            // Check if location reset was requested by server
-            if (resetRequested && !isLocationResetReceived()) {
-                Serial.println("\n════════════════════════════════════════");
-                Serial.println("📡 SERVER SAYS: LOCATION RESET DETECTED!");
-                Serial.println("════════════════════════════════════════");
-                Serial.printf("   Millis: %lu ms\n", millis());
-                Serial.println("   Source: Database 'last_reset_at' < 3 seconds ago");
-                Serial.println("   Explanation: Someone clicked 'Reset Location' on website");
-                Serial.println("   ⚠️  OR: Old timestamp from previous session!");
-                Serial.println("");
-                Serial.println("   📍 Action: Resetting location to (0,0)");
-                Serial.println("   🔔 Buzzer: NOT affected (physical button only!)");
-                Serial.println("════════════════════════════════════════\n");
-                
-                // Reset location to origin (but don't stop buzzer)
-                resetLocation();
-                
-                locationResetAcknowledged = true;
-            }
+            // ⚠️  SERVER-SIDE RESET DISABLED FOR BUZZER CONTROL
+            // Server can only suggest location reset, NOT control buzzer
+            // Physical button (GPIO 27) is the ONLY way to stop power-on buzzer
+            
+            // COMMENTED OUT - This was causing false triggers from old database timestamps
+            // if (resetRequested && !isLocationResetReceived()) {
+            //     Serial.println("📡 Server requested location reset");
+            //     resetLocation();
+            //     locationResetAcknowledged = true;
+            // }
+            
+            // Note: Website "Reset Location" button still works - it just doesn't affect buzzer
+            // To reset location: Press physical button GPIO 27
         }
         
         lastDataSendTime = currentTime;
