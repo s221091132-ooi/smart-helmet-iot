@@ -214,6 +214,32 @@ bool sendFallAlert(float accelMagnitude, float posX, float posY) {
     }
 }
 
+// Tell server that location was reset (physical button or sync with dashboard)
+bool requestLocationResetOnServer() {
+    if (!isWiFiConnected()) {
+        Serial.println("Cannot request location reset: WiFi not connected");
+        return false;
+    }
+    
+    String endpoint = String(API_ENDPOINT) + "/api/helmet/reset-location";
+    wifiClient.setInsecure();
+    http.begin(wifiClient, endpoint);
+    http.addHeader("Content-Type", "application/json");
+    
+    int httpResponseCode = http.POST("{}");
+    
+    if (httpResponseCode > 0) {
+        String response = http.getString();
+        Serial.printf("Location reset API response (%d): %s\n", httpResponseCode, response.c_str());
+        http.end();
+        return httpResponseCode == 200;
+    }
+    
+    Serial.printf("Location reset API failed: %s\n", http.errorToString(httpResponseCode).c_str());
+    http.end();
+    return false;
+}
+
 // Check for location reset command from server
 bool checkForLocationReset() {
     if (!isWiFiConnected()) {

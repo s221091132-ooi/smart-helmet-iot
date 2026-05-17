@@ -80,14 +80,23 @@ void initializeLocationTracking() {
     Serial.println("Location tracking initialized at origin (0, 0)");
 }
 
-// Reset location to origin (0, 0)
+// Reset location to origin (0, 0) with altitude and movement cleared
 void resetLocation() {
     location.positionX = 0.0;
     location.positionY = 0.0;
+    location.heading = 0.0;
+    location.speed = 0.0;
+    location.altitude = 0.0;
     location.distanceTraveled = 0.0;
     location.stepCount = 0;
+    location.direction = "N";
     
-    Serial.println("Location reset to origin (0, 0)");
+    lastVerticalAccel = 0;
+    smoothedVerticalAccel = 0;
+    lastStepTime = millis();
+    lastUpdateTime = millis();
+    
+    Serial.println("Location reset to origin (0, 0), altitude 0 m");
 }
 
 // Low-pass filter for smoothing vertical acceleration

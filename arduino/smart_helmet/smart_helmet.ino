@@ -35,21 +35,34 @@ const unsigned long SERIAL_PRINT_INTERVAL = 5000;  // Print debug info every 5 s
 
 // System state
 bool systemInitialized = false;
-bool locationResetAcknowledged = false;
 static bool buzzerStoppedByButton = false;
+static bool pendingImmediateDataSend = false;
 
-// Stop power-on buzzer on GPIO 27 tap (interrupt catches short presses during HTTP)
-void handleResetButtonBuzzerStop() {
-    if (buzzerStoppedByButton) return;
+// GPIO 27: buzzer off + local location reset + notify server + push 0,0,0 to dashboard
+void handleResetButtonPress() {
     if (!wasResetButtonTriggered()) return;
 
     Serial.println("\n════════════════════════════════════════");
     Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");
-    Serial.println("   Stopping buzzer...");
+    Serial.println("   • Stopping buzzer");
+    Serial.println("   • Resetting location to (0, 0), altitude 0 m");
+    Serial.println("   • Notifying server / website");
     Serial.println("════════════════════════════════════════\n");
-    stopBuzzer();
-    buzzerStoppedByButton = true;
-    Serial.println("✅ Buzzer stopped!\n");
+
+    if (!buzzerStoppedByButton) {
+        stopBuzzer();
+        buzzerStoppedByButton = true;
+    }
+    resetLocation();
+
+    if (isWiFiConnected()) {
+        requestLocationResetOnServer();
+        pendingImmediateDataSend = true;
+    } else {
+        Serial.println("⚠️  WiFi offline — location reset locally only");
+    }
+
+    Serial.println("✅ Full reset complete!\n");
 }
 
 void setup() {
@@ -94,7 +107,8 @@ void setup() {
     Serial.println("SYSTEM READY");
     Serial.println("=================================");
     Serial.println("\n🔔 Buzzer is beeping continuously...");
-    Serial.println("📍 Press RESET BUTTON (GPIO 27) to stop the buzzer.\n");
+    Serial.println("📍 Press RESET BUTTON (GPIO 27) to:");
+    Serial.println("   stop buzzer, reset location (0,0), and update website.\n");
     
     systemInitialized = true;
     lastDataSendTime = millis();
@@ -106,9 +120,6 @@ void loop() {
     
     unsigned long currentTime = millis();
     
-    // Check button first (before any blocking work)
-    handleResetButtonBuzzerStop();
-    
     // Update buzzer state machine
     updateBuzzer();
     
@@ -118,6 +129,9 @@ void loop() {
     // Read all sensors
     readAllSensors();
     SensorData sensorData = getSensorData();
+    
+    // Reset button before location update so this cycle starts from origin
+    handleResetButtonPress();
     
     // Update location tracking
     updateLocationTracking(sensorData);
@@ -168,29 +182,21 @@ void loop() {
         }
     }
     
-    // Send data to server at specified interval
-    if (currentTime - lastDataSendTime >= DATA_SEND_INTERVAL) {
-        handleResetButtonBuzzerStop();
+    // Send data to server (interval or immediately after GPIO 27 reset)
+    if (pendingImmediateDataSend || currentTime - lastDataSendTime >= DATA_SEND_INTERVAL) {
+        handleResetButtonPress();
         if (isWiFiConnected()) {
-            // Send sensor data
             bool resetRequested = sendSensorData(sensorData, locationData);
-            handleResetButtonBuzzerStop();
-            
-            // ⚠️  SERVER-SIDE RESET DISABLED FOR BUZZER CONTROL
-            // Server can only suggest location reset, NOT control buzzer
-            // Physical button (GPIO 27) is the ONLY way to stop power-on buzzer
-            
-            // COMMENTED OUT - This was causing false triggers from old database timestamps
-            // if (resetRequested && !isLocationResetReceived()) {
-            //     Serial.println("📡 Server requested location reset");
-            //     resetLocation();
-            //     locationResetAcknowledged = true;
-            // }
-            
-            // Note: Website "Reset Location" button still works - it just doesn't affect buzzer
-            // To reset location: Press physical button GPIO 27
+            handleResetButtonPress();
+
+            // Website "Reset Location" button sets last_reset_at; ESP32 syncs on next response
+            if (resetRequested) {
+                Serial.println("📡 Server requested location reset (dashboard button)");
+                resetLocation();
+                pendingImmediateDataSend = true;
+            }
         }
-        
+        pendingImmediateDataSend = false;
         lastDataSendTime = currentTime;
     }
     

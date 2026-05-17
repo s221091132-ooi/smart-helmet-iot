@@ -2,7 +2,7 @@
 // app/page.tsx - Main dashboard with real-time updates
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import BatteryGauge from '@/components/BatteryGauge';
 import LocationMap from '@/components/LocationMap';
 import FallAlertNotification from '@/components/FallAlertNotification';
@@ -21,6 +21,8 @@ export default function Dashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showLocationResetBanner, setShowLocationResetBanner] = useState(false);
+  const prevResetRequested = useRef(false);
 
   // Fetch latest status from API
   const fetchStatus = async () => {
@@ -61,6 +63,14 @@ export default function Dashboard() {
       }
 
       setFallAlerts(data.unacknowledged_falls || []);
+
+      // Physical button (GPIO 27) or dashboard reset updated tracking_sessions
+      if (data.reset_requested && !prevResetRequested.current) {
+        setPositionHistory([]);
+        setShowLocationResetBanner(true);
+        setTimeout(() => setShowLocationResetBanner(false), 5000);
+      }
+      prevResetRequested.current = !!data.reset_requested;
     } catch (err) {
       console.error('Error fetching status:', err);
       setError('Failed to connect to server');
@@ -173,6 +183,12 @@ export default function Dashboard() {
           {error && (
             <div className="mt-4 p-3 bg-red-100 dark:bg-red-900 border border-red-400 rounded text-red-700 dark:text-red-200 text-sm">
               {error}
+            </div>
+          )}
+
+          {showLocationResetBanner && (
+            <div className="mt-4 p-3 bg-green-100 dark:bg-green-900 border border-green-400 rounded text-green-800 dark:text-green-200 text-sm flex items-center">
+              <span className="font-medium">Location reset successfully! Position (0, 0), altitude 0 m.</span>
             </div>
           )}
         </div>
