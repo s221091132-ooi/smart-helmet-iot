@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
         position_x: payload.position.x,
         position_y: payload.position.y,
         direction: payload.direction,
+        heading: typeof payload.heading === 'number' ? payload.heading : 0,
         speed: payload.speed,
         altitude: payload.altitude,
         distance_traveled: payload.distance_traveled,

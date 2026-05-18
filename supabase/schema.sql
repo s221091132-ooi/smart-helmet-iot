@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS helmet_data (
     position_x FLOAT NOT NULL DEFAULT 0,
     position_y FLOAT NOT NULL DEFAULT 0,
     direction TEXT NOT NULL CHECK (direction IN ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')),
+    heading FLOAT NOT NULL DEFAULT 0,
     speed FLOAT NOT NULL DEFAULT 0 CHECK (speed >= 0),
     altitude FLOAT NOT NULL DEFAULT 0,
     distance_traveled FLOAT NOT NULL DEFAULT 0 CHECK (distance_traveled >= 0)

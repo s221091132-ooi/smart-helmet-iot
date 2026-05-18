@@ -9,15 +9,12 @@
 
 // Step detection: total accel magnitude peak above rest (~9.81 m/s²)
 #define STEP_PEAK_THRESHOLD 11.2f   // m/s² — walking impact on magnitude
-#define STEP_MIN_MAG 8.0f           // uT — minimum horizontal mag field for heading
 #define STEP_LENGTH 0.7             // Average step length in meters
 #define STEP_MIN_INTERVAL 300       // Minimum time between steps (ms) - prevents double counting
 #define SMOOTHING_ALPHA 0.3         // Low-pass filter coefficient
 
-// Heading configuration
-#define GYRO_SAMPLE_TIME 0.05       // Sample time in seconds (50ms = 20Hz)
-#define COMPLEMENTARY_FILTER_ALPHA 0.98  // Weight for gyro vs magnetometer
-#define MAG_DECLINATION 0.0         // Magnetic declination in degrees (adjust for location)
+// If compass is 90° off on your mount, change this (e.g. 90 or -90)
+#define HEADING_MOUNT_OFFSET 0.0f
 
 // Cardinal direction thresholds
 #define NORTH_MIN 337.5
@@ -56,12 +53,6 @@ float lastAccelMag = 9.81f;
 float smoothedAccelMag = 9.81f;
 unsigned long lastStepTime = 0;
 unsigned long lastUpdateTime = 0;
-bool headingInitialized = false;
-
-// Heading calculation state
-float headingFromMag = 0;
-float headingFromGyro = 0;
-
 // Initialize location tracking
 void initializeLocationTracking() {
     location.positionX = 0.0;
@@ -77,10 +68,6 @@ void initializeLocationTracking() {
     smoothedAccelMag = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
-    headingInitialized = false;
-    headingFromGyro = 0.0f;
-    headingFromMag = 0.0f;
-    
     Serial.println("Location tracking initialized at origin (0, 0)");
 }
 
@@ -99,10 +86,6 @@ void resetLocation() {
     smoothedAccelMag = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
-    headingInitialized = false;
-    headingFromGyro = 0.0f;
-    headingFromMag = 0.0f;
-    
     Serial.println("Location reset to origin (0, 0), altitude 0 m");
 }
 
@@ -110,13 +93,6 @@ float normalizeHeading(float heading) {
     while (heading < 0.0f) heading += 360.0f;
     while (heading >= 360.0f) heading -= 360.0f;
     return heading;
-}
-
-// Shortest signed difference a - b in degrees
-float headingDelta(float a, float b) {
-    float diff = normalizeHeading(a - b);
-    if (diff > 180.0f) diff -= 360.0f;
-    return diff;
 }
 
 float smoothAccelMagnitude(float magnitude) {
@@ -148,32 +124,6 @@ bool detectStep(float accelMagnitude) {
     
     lastAccelMag = smoothed;
     return false;
-}
-
-float calculateMagnetometerHeading(float magX, float magY) {
-    float heading = atan2(magY, magX) * 180.0f / PI;
-    heading += MAG_DECLINATION;
-    return normalizeHeading(heading);
-}
-
-// Complementary filter: gyro Z yaw + magnetometer (when field is valid)
-void updateHeading(float gyroZDegPerSec, float magX, float magY, float deltaTime) {
-    headingFromGyro = normalizeHeading(headingFromGyro + gyroZDegPerSec * deltaTime);
-    
-    float magHoriz = sqrt(magX * magX + magY * magY);
-    if (magHoriz >= STEP_MIN_MAG) {
-        headingFromMag = calculateMagnetometerHeading(magX, magY);
-        if (!headingInitialized) {
-            headingFromGyro = headingFromMag;
-            headingInitialized = true;
-        }
-        float diff = headingDelta(headingFromMag, headingFromGyro);
-        headingFromGyro = normalizeHeading(
-            headingFromGyro + (1.0f - COMPLEMENTARY_FILTER_ALPHA) * diff
-        );
-    }
-    
-    location.heading = headingFromGyro;
 }
 
 // Convert heading to cardinal direction
@@ -251,9 +201,10 @@ void updateLocationTracking(SensorData sensorData) {
     float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
     
     if (deltaTime <= 0.0f) return;
-    if (deltaTime > 0.5f) deltaTime = 0.05f;  // cap after long blocking loops
+    if (deltaTime > 0.5f) deltaTime = 0.05f;
     
-    updateHeading(sensorData.gyroZ, sensorData.magX, sensorData.magY, deltaTime);
+    // Use MPU9250 library AHRS yaw so compass follows physical rotation
+    location.heading = normalizeHeading(sensorData.headingDeg + HEADING_MOUNT_OFFSET);
     location.direction = headingToDirection(location.heading);
     
     if (detectStep(sensorData.accelMagnitude)) {

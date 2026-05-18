@@ -41,6 +41,7 @@ export interface HelmetDataRow {
   position_x: number;
   position_y: number;
   direction: Direction;
+  heading: number;
   speed: number;
   altitude: number;
   distance_traveled: number;
@@ -61,6 +62,7 @@ export interface HelmetDataInsert {
   position_x: number;
   position_y: number;
   direction: Direction;
+  heading?: number;
   speed: number;
   altitude: number;
   distance_traveled: number;
@@ -81,6 +83,7 @@ export interface HelmetDataUpdate {
   position_x?: number;
   position_y?: number;
   direction?: Direction;
+  heading?: number;
   speed?: number;
   altitude?: number;
   distance_traveled?: number;
@@ -150,6 +153,7 @@ export interface SensorDataPayload {
     y: number;
   };
   direction: Direction;
+  heading?: number;
   speed: number;
   altitude: number;
   distance_traveled: number;
@@ -185,6 +189,7 @@ export interface BatteryGaugeProps {
 export interface LocationMapProps {
   currentPosition: { x: number; y: number };
   direction: Direction;
+  heading: number;
   history: Array<{ x: number; y: number; timestamp: string }>;
 }
 

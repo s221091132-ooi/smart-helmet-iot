@@ -115,6 +115,7 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
     position["y"] = locationData.positionY;
     
     doc["direction"] = locationData.direction;
+    doc["heading"] = locationData.heading;
     doc["speed"] = locationData.speed;
     doc["altitude"] = locationData.altitude;
     doc["distance_traveled"] = locationData.distanceTraveled;

@@ -7,8 +7,10 @@ import { LocationMapProps, DIRECTION_ANGLES } from '@/lib/types';
 export default function LocationMap({
   currentPosition,
   direction,
+  heading,
   history,
 }: LocationMapProps) {
+  const compassAngle = heading ?? DIRECTION_ANGLES[direction];
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function LocationMap({
     ctx.stroke();
 
     // Draw direction arrow
-    const angle = (DIRECTION_ANGLES[direction] * Math.PI) / 180;
+    const angle = (compassAngle * Math.PI) / 180;
     const arrowLength = 20;
     const arrowEndX = currentX + Math.sin(angle) * arrowLength;
     const arrowEndY = currentY - Math.cos(angle) * arrowLength;
@@ -150,7 +152,7 @@ export default function LocationMap({
       currentY - 15
     );
 
-  }, [currentPosition, direction, history]);
+  }, [currentPosition, direction, heading, history, compassAngle]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
@@ -201,7 +203,7 @@ export default function LocationMap({
               <text x="12" y="36" textAnchor="middle" fontSize="10" fill="#374151">W</text>
               
               {/* Direction indicator */}
-              <g transform={`rotate(${DIRECTION_ANGLES[direction]} 32 32)`}>
+              <g transform={`rotate(${compassAngle} 32 32)`}>
                 <polygon points="32,18 28,28 32,26 36,28" fill="#10b981" />
                 <polygon points="32,46 28,36 32,38 36,36" fill="#6b7280" />
               </g>

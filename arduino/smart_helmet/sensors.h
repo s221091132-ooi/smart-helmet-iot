@@ -71,6 +71,9 @@ struct SensorData {
     float magY;
     float magZ;
     
+    // Compass heading 0–360° from MPU9250 AHRS (Madgwick), set in readMPU9250
+    float headingDeg;
+    
     // Acceleration magnitude (calculated)
     float accelMagnitude;
 };
@@ -92,7 +95,8 @@ bool initializeSensors() {
         success = false;
     } else {
         mpuInitialized = true;
-        Serial.println("MPU9250 initialized successfully");
+        mpu.ahrs(true);
+        Serial.println("MPU9250 initialized successfully (AHRS enabled)");
         
         delay(2000);
         Serial.println("Calibrating accelerometer + gyro (keep helmet still)...");
@@ -253,6 +257,11 @@ void readMPU9250() {
         currentSensorData.magY = mpu.getMagY();
         currentSensorData.magZ = mpu.getMagZ();
         
+        // Yaw from onboard Madgwick filter (-180..180) → compass 0..360
+        float yaw = mpu.getYaw();
+        if (yaw < 0.0f) yaw += 360.0f;
+        currentSensorData.headingDeg = yaw;
+        
         float ax = mpu.getAccX() * 9.81;
         float ay = mpu.getAccY() * 9.81;
         float az = mpu.getAccZ() * 9.81;
@@ -295,10 +304,11 @@ void printSensorData() {
                   currentSensorData.gyroX,
                   currentSensorData.gyroY,
                   currentSensorData.gyroZ);
-    Serial.printf("Mag: X=%.1f Y=%.1f Z=%.1f uT (heading needs non-zero mag)\n",
+    Serial.printf("Mag: X=%.1f Y=%.1f Z=%.1f uT | Heading: %.1f°\n",
                   currentSensorData.magX,
                   currentSensorData.magY,
-                  currentSensorData.magZ);
+                  currentSensorData.magZ,
+                  currentSensorData.headingDeg);
     Serial.println("=====================");
 }
 
