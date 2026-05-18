@@ -60,6 +60,27 @@ bool mpuHasFreshData = false;
 float mpu6050HeadingDeg = 0.0f;
 unsigned long mpu6050LastReadMs = 0;
 
+struct SensorData {
+    float batteryVoltage;
+    int batteryPercentage;
+    int remainingCapacity;
+    float solarCurrent;
+    float temperature;
+    int16_t accelX;
+    int16_t accelY;
+    int16_t accelZ;
+    float gyroX;
+    float gyroY;
+    float gyroZ;
+    float magX;
+    float magY;
+    float magZ;
+    float headingDeg;
+    float accelMagnitude;
+};
+
+SensorData currentSensorData;
+
 int16_t mpu6050Read16(uint8_t reg) {
     Wire.beginTransmission(mpu6050Addr);
     Wire.write(reg);
@@ -125,41 +146,6 @@ void readMPU6050() {
     currentSensorData.accelMagnitude = sqrt(axMs * axMs + ayMs * ayMs + azMs * azMs);
     mpuHasFreshData = true;
 }
-
-// Sensor data structure
-struct SensorData {
-    // Battery data
-    float batteryVoltage;
-    int batteryPercentage;
-    int remainingCapacity;
-    float solarCurrent;
-    
-    // Temperature
-    float temperature;
-    
-    // Accelerometer (raw values)
-    int16_t accelX;
-    int16_t accelY;
-    int16_t accelZ;
-    
-    // Gyroscope (degrees per second from MPU9250 library)
-    float gyroX;
-    float gyroY;
-    float gyroZ;
-    
-    // Magnetometer (microtesla, for heading)
-    float magX;
-    float magY;
-    float magZ;
-    
-    // Compass heading 0–360° from MPU9250 AHRS (Madgwick), set in readMPU9250
-    float headingDeg;
-    
-    // Acceleration magnitude (calculated)
-    float accelMagnitude;
-};
-
-SensorData currentSensorData;
 
 // Initialize all sensors
 bool initializeSensors() {
