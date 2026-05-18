@@ -192,7 +192,9 @@ void loop() {
     if (pendingImmediateDataSend || currentTime - lastDataSendTime >= DATA_SEND_INTERVAL) {
         handleResetButtonPress();
         if (isWiFiConnected()) {
+            readImuOnly();  // narrow blind window before HTTP blocks the loop
             bool resetRequested = sendSensorData(sensorData, locationData);
+            readImuOnly();
             handleResetButtonPress();
 
             // True only when JSON has reset_location:true (e.g. web reset, or brief echo after last_reset_at)

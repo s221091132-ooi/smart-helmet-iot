@@ -59,6 +59,14 @@ bool mpuInitialized = false;
 bool mpuHasFreshData = false;
 float mpu6050HeadingDeg = 0.0f;
 unsigned long mpu6050LastReadMs = 0;
+// Gyro Z bias (deg/s) — MPU6050 has no mag; subtract bias so heading holds when still
+float mpu6050GyroBiasZ = 0.0f;
+// Max delta-t (s) for one yaw integration step — avoids skipping yaw after WiFi/slow ADC gaps
+#define MPU6050_YAW_DT_CAP 0.35f
+
+// Slow ADC reads — don't run every loop (was ~120ms/loop → yaw gaps + sluggish compass)
+#define SOLAR_READ_INTERVAL_MS 2500u
+#define TEMP_READ_INTERVAL_MS 4000u
 
 struct SensorData {
     float batteryVoltage;
@@ -108,8 +116,25 @@ bool initMPU6050(uint8_t addr) {
     uint8_t who = Wire.read();
     if (who != 0x68 && who != 0x71) return false;
     mpu6050HeadingDeg = 0.0f;
+    mpu6050GyroBiasZ = 0.0f;
     mpu6050LastReadMs = millis();
     return true;
+}
+
+// Average gyro Z at rest (helmet still) — call once after MPU6050 init
+void calibrateMpu6050GyroBias() {
+    Serial.println("  MPU6050: calibrating gyro Z bias (keep helmet still)...");
+    delay(400);
+    double sum = 0.0;
+    const int n = 120;
+    for (int i = 0; i < n; i++) {
+        int16_t gz = mpu6050Read16(0x47);
+        sum += (double)gz / 131.0;
+        delay(5);
+    }
+    mpu6050GyroBiasZ = (float)(sum / (double)n);
+    mpu6050LastReadMs = millis();
+    Serial.printf("  MPU6050 gyro Z bias: %.3f deg/s (subtracted from yaw rate)\n", mpu6050GyroBiasZ);
 }
 
 void readMPU6050() {
@@ -122,7 +147,7 @@ void readMPU6050() {
     currentSensorData.accelY = ay;
     currentSensorData.accelZ = az;
 
-    float gyroZ = gz / 131.0f;
+    float gyroZ = gz / 131.0f - mpu6050GyroBiasZ;
     currentSensorData.gyroX = mpu6050Read16(0x43) / 131.0f;
     currentSensorData.gyroY = mpu6050Read16(0x45) / 131.0f;
     currentSensorData.gyroZ = gyroZ;
@@ -132,12 +157,19 @@ void readMPU6050() {
 
     unsigned long now = millis();
     float dt = (now - mpu6050LastReadMs) / 1000.0f;
-    if (dt > 0.0f && dt < 0.25f) {
-        mpu6050HeadingDeg += gyroZ * dt;
+    mpu6050LastReadMs = now;
+    // Integrate full elapsed time in slices (same gyro sample — OK if rate ~constant over gap).
+    // Old code skipped entirely when dt >= 0.25s → heading froze after WiFi / slow ADC.
+    if (dt > 0.0f) {
+        float remaining = fminf(dt, 3.0f);
+        while (remaining > 1e-5f) {
+            float slice = fminf(remaining, MPU6050_YAW_DT_CAP);
+            mpu6050HeadingDeg += gyroZ * slice;
+            remaining -= slice;
+        }
         while (mpu6050HeadingDeg < 0.0f) mpu6050HeadingDeg += 360.0f;
         while (mpu6050HeadingDeg >= 360.0f) mpu6050HeadingDeg -= 360.0f;
     }
-    mpu6050LastReadMs = now;
     currentSensorData.headingDeg = mpu6050HeadingDeg;
 
     float axMs = (ax / 16384.0f) * 9.81f;
@@ -171,7 +203,8 @@ bool initializeSensors() {
         mpuInitialized = true;
         Serial.printf("MPU6050 OK at 0x%02X — X/Y map (forward=+Y, gyro heading)\n", mpu6050Addr);
         Serial.println("  Face helmet forward at startup = map North (+Y)");
-        delay(1000);
+        delay(800);
+        calibrateMpu6050GyroBias();
     } else {
         activeImu = IMU_NONE;
         mpuInitialized = false;
@@ -355,14 +388,30 @@ void readImuOnly() {
 
 // Read all sensors and update currentSensorData
 void readAllSensors() {
-    // IMU first — before slow solar/LM35 delays (~100ms)
+    // IMU first — before slow solar/LM35 (those are throttled so loop stays fast for yaw integration)
     readImuOnly();
-    
+
+    static unsigned long lastSolarReadMs = 0;
+    static unsigned long lastTempReadMs = 0;
+    static float cachedSolarCurrent = 0.0f;
+    static float cachedTemperature = 25.0f;
+
     currentSensorData.batteryVoltage = readBatteryVoltage();
     currentSensorData.batteryPercentage = calculateBatteryPercentage(currentSensorData.batteryVoltage);
     currentSensorData.remainingCapacity = calculateRemainingCapacity(currentSensorData.batteryPercentage);
-    currentSensorData.solarCurrent = readSolarCurrent();
-    currentSensorData.temperature = readTemperature();
+
+    unsigned long t = millis();
+    if (lastSolarReadMs == 0 || t - lastSolarReadMs >= SOLAR_READ_INTERVAL_MS) {
+        cachedSolarCurrent = readSolarCurrent();
+        lastSolarReadMs = t;
+    }
+    currentSensorData.solarCurrent = cachedSolarCurrent;
+
+    if (lastTempReadMs == 0 || t - lastTempReadMs >= TEMP_READ_INTERVAL_MS) {
+        cachedTemperature = readTemperature();
+        lastTempReadMs = t;
+    }
+    currentSensorData.temperature = cachedTemperature;
 }
 
 // Print sensor data to Serial for debugging
@@ -415,6 +464,7 @@ bool wasResetButtonTriggered() {
 void resetImuHeading() {
     mpu6050HeadingDeg = 0.0f;
     currentSensorData.headingDeg = 0.0f;
+    mpu6050LastReadMs = millis();
 }
 
 // Get current sensor data
