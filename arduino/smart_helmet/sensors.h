@@ -8,7 +8,12 @@
 #include <MPU9250.h>
 
 // Reset button interrupt flag (short presses missed while HTTP blocks loop)
+// Reset button: each physical press (falling edge) should trigger one location reset
+#define RESET_BUTTON_DEBOUNCE_MS 380u
+
 volatile bool g_resetButtonInterrupt = false;
+static bool g_resetButtonPrevLow = false;
+static unsigned long g_resetLastAcceptedMs = 0;
 
 void IRAM_ATTR onResetButtonInterrupt() {
     g_resetButtonInterrupt = true;
@@ -226,6 +231,7 @@ bool initializeSensors() {
     
     // Initialize reset button (active LOW with internal pullup)
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+    g_resetButtonPrevLow = (digitalRead(RESET_BUTTON_PIN) == LOW);
     attachInterrupt(digitalPinToInterrupt(RESET_BUTTON_PIN), onResetButtonInterrupt, FALLING);
     Serial.println("Reset button configured on GPIO 27 (active LOW, interrupt on press)");
     
@@ -446,18 +452,30 @@ bool isBatteryCritical() {
 }
 
 // Read reset button (active LOW with INPUT_PULLUP)
-// Returns true while button is physically pressed
 bool isResetButtonPressed() {
     return digitalRead(RESET_BUTTON_PIN) == LOW;
 }
 
-// True on short tap (interrupt) or while held (poll backup)
+// One true per physical press: ISR or polled falling edge, debounced (not "while held")
 bool wasResetButtonTriggered() {
+    bool low = isResetButtonPressed();
+    bool fallingEdge = (low && !g_resetButtonPrevLow);
+    g_resetButtonPrevLow = low;
+
+    bool edge = false;
     if (g_resetButtonInterrupt) {
         g_resetButtonInterrupt = false;
-        return true;
+        edge = true;
+    } else if (fallingEdge) {
+        edge = true;
     }
-    return isResetButtonPressed();
+
+    if (!edge) return false;
+
+    unsigned long now = millis();
+    if (now - g_resetLastAcceptedMs < RESET_BUTTON_DEBOUNCE_MS) return false;
+    g_resetLastAcceptedMs = now;
+    return true;
 }
 
 // Reset gyro-integrated heading (MPU6050) when GPIO27 / reset location
