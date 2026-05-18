@@ -68,6 +68,8 @@ unsigned long mpu6050LastReadMs = 0;
 float mpu6050GyroBiasZ = 0.0f;
 // Max delta-t (s) for one yaw integration step — avoids skipping yaw after WiFi/slow ADC gaps
 #define MPU6050_YAW_DT_CAP 0.35f
+// Heading sense: +1.0 default; -1.0 if CW turn moves compass toward W instead of E (mount / chip axis)
+#define MPU6050_HEADING_GYRO_SIGN (-1.0f)
 
 // Slow ADC reads — don't run every loop (was ~120ms/loop → yaw gaps + sluggish compass)
 #define SOLAR_READ_INTERVAL_MS 2500u
@@ -169,7 +171,7 @@ void readMPU6050() {
         float remaining = fminf(dt, 3.0f);
         while (remaining > 1e-5f) {
             float slice = fminf(remaining, MPU6050_YAW_DT_CAP);
-            mpu6050HeadingDeg += gyroZ * slice;
+            mpu6050HeadingDeg += MPU6050_HEADING_GYRO_SIGN * gyroZ * slice;
             remaining -= slice;
         }
         while (mpu6050HeadingDeg < 0.0f) mpu6050HeadingDeg += 360.0f;
