@@ -342,17 +342,8 @@ void readMPU9250() {
     }
 }
 
-// Read all sensors and update currentSensorData
-void readAllSensors() {
-    // Read battery system
-    currentSensorData.batteryVoltage = readBatteryVoltage();
-    currentSensorData.batteryPercentage = calculateBatteryPercentage(currentSensorData.batteryVoltage);
-    currentSensorData.remainingCapacity = calculateRemainingCapacity(currentSensorData.batteryPercentage);
-    currentSensorData.solarCurrent = readSolarCurrent();
-    
-    // Read temperature
-    currentSensorData.temperature = readTemperature();
-    
+// Read IMU only (fast — call often for step detection)
+void readImuOnly() {
     if (activeImu == IMU_MPU9250) {
         readMPU9250();
     } else if (activeImu == IMU_MPU6050) {
@@ -360,6 +351,18 @@ void readAllSensors() {
     } else {
         mpuHasFreshData = false;
     }
+}
+
+// Read all sensors and update currentSensorData
+void readAllSensors() {
+    // IMU first — before slow solar/LM35 delays (~100ms)
+    readImuOnly();
+    
+    currentSensorData.batteryVoltage = readBatteryVoltage();
+    currentSensorData.batteryPercentage = calculateBatteryPercentage(currentSensorData.batteryVoltage);
+    currentSensorData.remainingCapacity = calculateRemainingCapacity(currentSensorData.batteryPercentage);
+    currentSensorData.solarCurrent = readSolarCurrent();
+    currentSensorData.temperature = readTemperature();
 }
 
 // Print sensor data to Serial for debugging

@@ -8,11 +8,11 @@
 #include "sensors.h"
 #include <math.h>
 
-// Step detection: total accel magnitude peak above rest (~9.81 m/s²)
-#define STEP_PEAK_THRESHOLD 10.8f   // m/s² — walking peak (lower = more sensitive)
-#define STEP_LENGTH 0.71f           // meters/step (~14 steps ≈ 10 m forward)
-#define STEP_MIN_INTERVAL 300       // Minimum time between steps (ms) - prevents double counting
-#define SMOOTHING_ALPHA 0.3         // Low-pass filter coefficient
+// Step = peak in |accel magnitude - 1g| (works when helmet tilts while walking)
+#define STEP_DYNAMIC_THRESHOLD 1.4f   // m/s² above gravity (lower = more sensitive)
+#define STEP_LENGTH 0.71f               // meters/step (~2.3 ft)
+#define STEP_MIN_INTERVAL 280           // ms between steps
+#define SMOOTHING_ALPHA 0.35f
 
 // If compass is 90° off on your mount, change this (e.g. 90 or -90)
 #define HEADING_MOUNT_OFFSET 0.0f
@@ -53,10 +53,11 @@ LocationData location;
 bool locationTrackingEnabled = false;
 
 // Step detection state
-float lastAccelMag = 9.81f;
 float smoothedAccelMag = 9.81f;
+float lastDynamicAccel = 0.0f;
 unsigned long lastStepTime = 0;
 unsigned long lastUpdateTime = 0;
+unsigned long lastTrackDebugMs = 0;
 // Initialize location tracking
 void initializeLocationTracking() {
     location.positionX = 0.0;
@@ -68,8 +69,8 @@ void initializeLocationTracking() {
     location.stepCount = 0;
     location.direction = "N";
     
-    lastAccelMag = 9.81f;
     smoothedAccelMag = 9.81f;
+    lastDynamicAccel = 0.0f;
     lastStepTime = 0;
     lastUpdateTime = millis();
     locationTrackingEnabled = false;
@@ -92,8 +93,8 @@ void resetLocation() {
     location.stepCount = 0;
     location.direction = "N";
     
-    lastAccelMag = 9.81f;
     smoothedAccelMag = 9.81f;
+    lastDynamicAccel = 0.0f;
     lastStepTime = 0;
     lastUpdateTime = millis();
     resetImuHeading();
@@ -111,13 +112,18 @@ float smoothAccelMagnitude(float magnitude) {
     return smoothedAccelMag;
 }
 
-// Detect steps from total acceleration magnitude (works when helmet tilts)
+// Detect steps from change above resting 1g (helmet on head while walking)
 bool detectStep(float accelMagnitude) {
     unsigned long currentTime = millis();
     float smoothed = smoothAccelMagnitude(accelMagnitude);
+    float dynamic = fabsf(smoothed - 9.81f);
     
-    bool isPeak = (smoothed > STEP_PEAK_THRESHOLD) && (lastAccelMag <= STEP_PEAK_THRESHOLD);
-    bool enoughTimePassed = (lastStepTime == 0) || ((currentTime - lastStepTime) >= STEP_MIN_INTERVAL);
+    bool isPeak = (dynamic > STEP_DYNAMIC_THRESHOLD) &&
+                  (lastDynamicAccel <= STEP_DYNAMIC_THRESHOLD);
+    bool enoughTimePassed = (lastStepTime == 0) ||
+                            ((currentTime - lastStepTime) >= STEP_MIN_INTERVAL);
+    
+    lastDynamicAccel = dynamic;
     
     if (isPeak && enoughTimePassed) {
         if (lastStepTime > 0) {
@@ -129,11 +135,10 @@ bool detectStep(float accelMagnitude) {
             }
         }
         lastStepTime = currentTime;
-        lastAccelMag = smoothed;
+        Serial.printf("STEP detected (dynamic=%.2f m/s2, mag=%.2f)\n", dynamic, smoothed);
         return true;
     }
     
-    lastAccelMag = smoothed;
     return false;
 }
 
@@ -191,7 +196,9 @@ void updateSpeed() {
 
 // Main location tracking update (call this in main loop)
 void updateLocationTracking(SensorData sensorData) {
+    readImuOnly();
     if (!mpuHasFreshData) return;
+    sensorData = getSensorData();
     
     unsigned long currentTime = millis();
     float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
@@ -199,11 +206,14 @@ void updateLocationTracking(SensorData sensorData) {
     if (deltaTime <= 0.0f) return;
     if (deltaTime > 0.5f) deltaTime = 0.05f;
     
-    // Use MPU9250 library AHRS yaw so compass follows physical rotation
     location.heading = normalizeHeading(sensorData.headingDeg + HEADING_MOUNT_OFFSET);
     location.direction = headingToDirection(location.heading);
     
     if (!locationTrackingEnabled) {
+        if (currentTime - lastTrackDebugMs > 4000) {
+            lastTrackDebugMs = currentTime;
+            Serial.println("Tracking OFF — press GPIO27 RESET to start map from (0,0)");
+        }
         lastUpdateTime = currentTime;
         return;
     }
@@ -212,9 +222,16 @@ void updateLocationTracking(SensorData sensorData) {
         updatePosition();
     }
     
+    if (currentTime - lastTrackDebugMs > 2000) {
+        lastTrackDebugMs = currentTime;
+        float dyn = fabsf(smoothedAccelMag - 9.81f);
+        Serial.printf("TrackON |mag|=%.2f dyn=%.2f steps=%d pos(%.2f,%.2f)m dist=%.2fm\n",
+                      sensorData.accelMagnitude, dyn, location.stepCount,
+                      location.positionX, location.positionY, location.distanceTraveled);
+    }
+    
     updateSpeed();
     location.altitude = 0.0f;
-    
     lastUpdateTime = currentTime;
 }
 
