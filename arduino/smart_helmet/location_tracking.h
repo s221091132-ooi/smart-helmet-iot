@@ -9,10 +9,10 @@
 #include "debug_agent_log.h"
 #include <math.h>
 
-// Step = spike in |accelMag - adaptiveBaseline| (fixed 9.81 fails when helmet is tilted)
-#define STEP_DYNAMIC_THRESHOLD 0.85f  // m/s² above local baseline (walking impulse)
-#define STEP_BASELINE_LOCK 1.15f        // below this deviation, baseline slowly tracks magnitude
-#define STEP_BASELINE_ALPHA 0.02f     // how fast baseline follows tilt (~50 frames)
+// Step = spike in RAW |accelMag - baseline| (smoothed was too correlated with baseline → no peaks)
+#define STEP_DYNAMIC_THRESHOLD 0.55f  // m/s² above baseline on raw magnitude
+#define STEP_BASELINE_LOCK 2.2f       // only track baseline when nearly steady (don't eat walk spikes)
+#define STEP_BASELINE_ALPHA 0.008f
 #define STEP_LENGTH 0.71f             // meters/step (~2.3 ft)
 #define STEP_MIN_INTERVAL 240         // ms between steps
 #define SMOOTHING_ALPHA 0.25f
@@ -127,19 +127,18 @@ float smoothAccelMagnitude(float magnitude) {
     return smoothedAccelMag;
 }
 
-// Detect steps: impulse above slowly-adapting magnitude baseline (tilted helmet OK)
+// Detect steps: raw |a|-baseline peak (smoothed-baseline was always ~0 while walking)
 bool detectStep(float accelMagnitude) {
     unsigned long currentTime = millis();
-    float smoothed = smoothAccelMagnitude(accelMagnitude);
+    (void)smoothAccelMagnitude(accelMagnitude);  // keep EMA for Serial/debug only
 
-    // Track "resting" |a| when not in a big spike (helmet tilt changes total magnitude)
     float devFromBase = fabsf(accelMagnitude - stepMagBaseline);
     if (devFromBase < STEP_BASELINE_LOCK) {
         stepMagBaseline =
             (1.0f - STEP_BASELINE_ALPHA) * stepMagBaseline + STEP_BASELINE_ALPHA * accelMagnitude;
     }
 
-    float dynamic = fabsf(smoothed - stepMagBaseline);
+    float dynamic = fabsf(accelMagnitude - stepMagBaseline);
 
     bool isPeak = (dynamic > STEP_DYNAMIC_THRESHOLD) &&
                   (lastDynamicAccel <= STEP_DYNAMIC_THRESHOLD);
@@ -158,11 +157,12 @@ bool detectStep(float accelMagnitude) {
             }
         }
         lastStepTime = currentTime;
-        Serial.printf("STEP ok dyn=%.2f mag=%.2f base=%.2f\n", dynamic, smoothed, stepMagBaseline);
+        Serial.printf("STEP ok dyn=%.2f raw=%.2f base=%.2f\n", dynamic, accelMagnitude, stepMagBaseline);
         // #region agent log
-        agentLog("H4", "location_tracking.h:detectStep", "step_fired", dynamic, smoothed, stepMagBaseline,
+        agentLog("H4", "location_tracking.h:detectStep", "step_fired", dynamic, accelMagnitude, stepMagBaseline,
                  location.stepCount + 1);
         // #endregion
+        lastDynamicAccel = 0.0f;
         return true;
     }
 
@@ -259,9 +259,9 @@ void updateLocationTracking(SensorData sensorData) {
     static unsigned long lastAgentSample = 0;
     if (currentTime - lastAgentSample >= 500) {
         lastAgentSample = currentTime;
-        float dyn = fabsf(smoothedAccelMag - stepMagBaseline);
+        float dynRaw = fabsf(sensorData.accelMagnitude - stepMagBaseline);
         agentLog("H3", "location_tracking.h:updateLocationTracking", "track_sample",
-                 sensorData.accelMagnitude, stepMagBaseline, dyn, location.stepCount);
+                 sensorData.accelMagnitude, stepMagBaseline, dynRaw, location.stepCount);
         agentLog("H5", "location_tracking.h:updateLocationTracking", "imu_path",
                  (float)activeImu, sensorData.accelMagnitude, 0.0f, mpuInitialized ? 1 : 0);
     }
@@ -273,9 +273,9 @@ void updateLocationTracking(SensorData sensorData) {
     
     if (currentTime - lastTrackDebugMs > 2000) {
         lastTrackDebugMs = currentTime;
-        float dyn = fabsf(smoothedAccelMag - stepMagBaseline);
-        Serial.printf("TrackON |mag|=%.2f dyn=%.2f base=%.2f steps=%d pos(%.2f,%.2f)m dist=%.2fm\n",
-                      sensorData.accelMagnitude, dyn, stepMagBaseline, location.stepCount,
+        float dynRaw = fabsf(sensorData.accelMagnitude - stepMagBaseline);
+        Serial.printf("TrackON |mag|=%.2f dyn_raw=%.2f base=%.2f steps=%d pos(%.2f,%.2f)m dist=%.2fm\n",
+                      sensorData.accelMagnitude, dynRaw, stepMagBaseline, location.stepCount,
                       location.positionX, location.positionY, location.distanceTraveled);
     }
     
