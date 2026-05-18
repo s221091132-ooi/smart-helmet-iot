@@ -191,6 +191,7 @@ export interface LocationMapProps {
   direction: Direction;
   heading: number;
   history: Array<{ x: number; y: number; timestamp: string }>;
+  distanceTraveled?: number;
 }
 
 export interface FallAlertProps {

@@ -1,5 +1,6 @@
-// location_tracking.h - Hybrid Location Tracking for Smart Helmet
-// Uses step detection + gyroscope heading for pedestrian dead reckoning
+// location_tracking.h - 2D location (X, Y) for live map
+// Forward at heading 0° = +Y (North). Right = +X (East). Left = -X.
+// Each step moves STEP_LENGTH meters along current heading; distance_traveled sums steps.
 
 #ifndef LOCATION_TRACKING_H
 #define LOCATION_TRACKING_H
@@ -8,8 +9,8 @@
 #include <math.h>
 
 // Step detection: total accel magnitude peak above rest (~9.81 m/s²)
-#define STEP_PEAK_THRESHOLD 11.2f   // m/s² — walking impact on magnitude
-#define STEP_LENGTH 0.7             // Average step length in meters
+#define STEP_PEAK_THRESHOLD 10.8f   // m/s² — walking peak (lower = more sensitive)
+#define STEP_LENGTH 0.71f           // meters/step (~14 steps ≈ 10 m forward)
 #define STEP_MIN_INTERVAL 300       // Minimum time between steps (ms) - prevents double counting
 #define SMOOTHING_ALPHA 0.3         // Low-pass filter coefficient
 
@@ -40,7 +41,7 @@ struct LocationData {
     float positionY;          // Y coordinate in meters
     float heading;            // Current heading in degrees (0=N, 90=E, 180=S, 270=W)
     float speed;              // Current speed in km/h
-    float altitude;           // Altitude in meters
+    float altitude;           // Not used for map (kept at 0)
     float distanceTraveled;   // Total distance traveled in meters
     int stepCount;            // Total steps counted
     String direction;         // Cardinal direction (N, NE, E, SE, S, SW, W, NW)
@@ -59,7 +60,7 @@ void initializeLocationTracking() {
     location.positionY = 0.0;
     location.heading = 0.0;
     location.speed = 0.0;
-    location.altitude = 100.0;  // Default altitude
+    location.altitude = 0.0f;
     location.distanceTraveled = 0.0;
     location.stepCount = 0;
     location.direction = "N";
@@ -68,7 +69,7 @@ void initializeLocationTracking() {
     smoothedAccelMag = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
-    Serial.println("Location tracking initialized at origin (0, 0)");
+    Serial.println("2D map tracking: origin (0,0), forward=+Y, distance from steps");
 }
 
 // Reset location to origin (0, 0) with altitude and movement cleared
@@ -86,6 +87,7 @@ void resetLocation() {
     smoothedAccelMag = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
+    resetImuHeading();
     Serial.println("Location reset to origin (0, 0), altitude 0 m");
 }
 
@@ -164,8 +166,11 @@ void updatePosition() {
     // Update distance traveled
     location.distanceTraveled += STEP_LENGTH;
     
-    // Update step count
     location.stepCount++;
+
+    Serial.printf("MAP: (X=%.2f, Y=%.2f) dist=%.2fm steps=%d heading=%.0f°\n",
+                  location.positionX, location.positionY,
+                  location.distanceTraveled, location.stepCount, location.heading);
 }
 
 // Decay speed to zero when no steps detected recently
@@ -173,24 +178,6 @@ void updateSpeed() {
     if (lastStepTime == 0 || (millis() - lastStepTime) > 2000) {
         location.speed = 0.0f;
     }
-}
-
-// Update altitude (simplified - using vertical acceleration integration)
-void updateAltitude(float accelZ, float deltaTime) {
-    // Convert acceleration to m/s²
-    float verticalAccel = (accelZ / 16384.0) * 9.81;
-    
-    // Remove gravity offset
-    verticalAccel -= 9.81;
-    
-    // Simple altitude estimation (accumulates error over time)
-    // In practice, would need barometer for accuracy
-    static float verticalVelocity = 0;
-    verticalVelocity += verticalAccel * deltaTime;
-    location.altitude += verticalVelocity * deltaTime;
-    
-    // Add damping to prevent drift
-    verticalVelocity *= 0.98;
 }
 
 // Main location tracking update (call this in main loop)
@@ -208,14 +195,11 @@ void updateLocationTracking(SensorData sensorData) {
     location.direction = headingToDirection(location.heading);
     
     if (detectStep(sensorData.accelMagnitude)) {
-        Serial.println("LOCATION: Step detected!");
         updatePosition();
     }
     
     updateSpeed();
-    
-    // Update altitude
-    updateAltitude(sensorData.accelZ, deltaTime);
+    location.altitude = 0.0f;
     
     lastUpdateTime = currentTime;
 }

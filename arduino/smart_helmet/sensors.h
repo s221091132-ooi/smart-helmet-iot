@@ -1,5 +1,5 @@
 // sensors.h - Sensor reading functions for Smart Helmet
-// Handles MPU9250, DS18B20, ACS712, and B25 fuel gauge
+// Handles MPU9250 or MPU6050, LM35, ACS712
 
 #ifndef SENSORS_H
 #define SENSORS_H
@@ -40,10 +40,91 @@ void IRAM_ATTR onResetButtonInterrupt() {
 #define ACS712_SENSITIVITY 0.185  // 185mV per Amp for 5A model
 float ACS712_OFFSET = 2.5;        // Offset voltage at zero current (will be calibrated at startup)
 
-// MPU9250 sensor object
+#define I2C_SDA_PIN 21
+#define I2C_SCL_PIN 22
+
+// MPU6050 fallback (same I2C bus as MPU9250)
+#define MPU6050_ADDR_68 0x68
+#define MPU6050_ADDR_69 0x69
+#define MPU6050_PWR_MGMT_1 0x6B
+#define MPU6050_WHO_AM_I 0x75
+#define MPU6050_ACCEL_XOUT_H 0x3B
+
+enum ImuType { IMU_NONE, IMU_MPU9250, IMU_MPU6050 };
+ImuType activeImu = IMU_NONE;
+uint8_t mpu6050Addr = MPU6050_ADDR_68;
+
 MPU9250 mpu;
 bool mpuInitialized = false;
 bool mpuHasFreshData = false;
+float mpu6050HeadingDeg = 0.0f;
+unsigned long mpu6050LastReadMs = 0;
+
+int16_t mpu6050Read16(uint8_t reg) {
+    Wire.beginTransmission(mpu6050Addr);
+    Wire.write(reg);
+    Wire.endTransmission(false);
+    Wire.requestFrom(mpu6050Addr, (uint8_t)2);
+    if (Wire.available() < 2) return 0;
+    return ((int16_t)Wire.read() << 8) | Wire.read();
+}
+
+bool mpu6050WriteByte(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(mpu6050Addr);
+    Wire.write(reg);
+    Wire.write(value);
+    return Wire.endTransmission() == 0;
+}
+
+bool initMPU6050(uint8_t addr) {
+    mpu6050Addr = addr;
+    if (!mpu6050WriteByte(MPU6050_PWR_MGMT_1, 0x00)) return false;
+    Wire.beginTransmission(mpu6050Addr);
+    Wire.write(MPU6050_WHO_AM_I);
+    Wire.endTransmission(false);
+    Wire.requestFrom(mpu6050Addr, (uint8_t)1);
+    if (Wire.available() < 1) return false;
+    uint8_t who = Wire.read();
+    if (who != 0x68 && who != 0x71) return false;
+    mpu6050HeadingDeg = 0.0f;
+    mpu6050LastReadMs = millis();
+    return true;
+}
+
+void readMPU6050() {
+    int16_t ax = mpu6050Read16(MPU6050_ACCEL_XOUT_H);
+    int16_t ay = mpu6050Read16(MPU6050_ACCEL_XOUT_H + 2);
+    int16_t az = mpu6050Read16(MPU6050_ACCEL_XOUT_H + 4);
+    int16_t gz = mpu6050Read16(0x47);
+
+    currentSensorData.accelX = ax;
+    currentSensorData.accelY = ay;
+    currentSensorData.accelZ = az;
+
+    float gyroZ = gz / 131.0f;
+    currentSensorData.gyroX = mpu6050Read16(0x43) / 131.0f;
+    currentSensorData.gyroY = mpu6050Read16(0x45) / 131.0f;
+    currentSensorData.gyroZ = gyroZ;
+    currentSensorData.magX = 0;
+    currentSensorData.magY = 0;
+    currentSensorData.magZ = 0;
+
+    unsigned long now = millis();
+    float dt = (now - mpu6050LastReadMs) / 1000.0f;
+    if (dt > 0.0f && dt < 0.25f) {
+        mpu6050HeadingDeg += gyroZ * dt;
+        while (mpu6050HeadingDeg < 0.0f) mpu6050HeadingDeg += 360.0f;
+        while (mpu6050HeadingDeg >= 360.0f) mpu6050HeadingDeg -= 360.0f;
+    }
+    mpu6050LastReadMs = now;
+    currentSensorData.headingDeg = mpu6050HeadingDeg;
+
+    float axMs = (ax / 16384.0f) * 9.81f;
+    float ayMs = (ay / 16384.0f) * 9.81f;
+    float azMs = (az / 16384.0f) * 9.81f;
+    currentSensorData.accelMagnitude = sqrt(axMs * axMs + ayMs * ayMs + azMs * azMs);
+    mpuHasFreshData = true;
+}
 
 // Sensor data structure
 struct SensorData {
@@ -84,28 +165,32 @@ SensorData currentSensorData;
 bool initializeSensors() {
     bool success = true;
     
-    // Initialize I2C
-    Wire.begin();
-    Wire.setClock(400000);  // 400kHz I2C
-    
-    // Initialize MPU9250
-    if (!mpu.setup(0x68)) {  // 0x68 is default MPU9250 address
-        Serial.println("ERROR: MPU9250 initialization failed!");
-        mpuInitialized = false;
-        success = false;
-    } else {
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    Wire.setClock(400000);
+
+    // Try MPU9250 first, then MPU6050 (X/Y step tracking works with both)
+    if (mpu.setup(0x68) || mpu.setup(0x69)) {
+        activeImu = IMU_MPU9250;
         mpuInitialized = true;
         mpu.ahrs(true);
-        Serial.println("MPU9250 initialized successfully (AHRS enabled)");
-        
+        Serial.println("MPU9250 OK — X/Y map + compass heading");
+
         delay(2000);
-        Serial.println("Calibrating accelerometer + gyro (keep helmet still)...");
+        Serial.println("Calibrating accel/gyro (keep still)...");
         mpu.calibrateAccelGyro();
-        Serial.println("Accel/gyro calibration complete");
-        
-        Serial.println("Calibrating magnetometer — rotate helmet slowly in figure-8 for 15 sec...");
+        Serial.println("Rotate figure-8 for magnetometer (15 sec)...");
         mpu.calibrateMag();
-        Serial.println("Magnetometer calibration complete");
+    } else if (initMPU6050(MPU6050_ADDR_68) || initMPU6050(MPU6050_ADDR_69)) {
+        activeImu = IMU_MPU6050;
+        mpuInitialized = true;
+        Serial.printf("MPU6050 OK at 0x%02X — X/Y map (forward=+Y, gyro heading)\n", mpu6050Addr);
+        Serial.println("  Face helmet forward at startup = map North (+Y)");
+        delay(1000);
+    } else {
+        activeImu = IMU_NONE;
+        mpuInitialized = false;
+        Serial.println("WARNING: No IMU on I2C — X/Y tracking disabled");
+        Serial.println("  Check SDA=21, SCL=22, VCC=3.3V, GND");
     }
     
     // Initialize analog pins for temperature and current sensors
@@ -282,8 +367,13 @@ void readAllSensors() {
     // Read temperature
     currentSensorData.temperature = readTemperature();
     
-    // Read MPU9250
-    readMPU9250();
+    if (activeImu == IMU_MPU9250) {
+        readMPU9250();
+    } else if (activeImu == IMU_MPU6050) {
+        readMPU6050();
+    } else {
+        mpuHasFreshData = false;
+    }
 }
 
 // Print sensor data to Serial for debugging
@@ -330,6 +420,12 @@ bool wasResetButtonTriggered() {
         return true;
     }
     return isResetButtonPressed();
+}
+
+// Reset gyro-integrated heading (MPU6050) when GPIO27 / reset location
+void resetImuHeading() {
+    mpu6050HeadingDeg = 0.0f;
+    currentSensorData.headingDeg = 0.0f;
 }
 
 // Get current sensor data

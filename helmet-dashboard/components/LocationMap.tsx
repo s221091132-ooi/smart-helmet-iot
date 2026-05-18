@@ -9,6 +9,7 @@ export default function LocationMap({
   direction,
   heading,
   history,
+  distanceTraveled = 0,
 }: LocationMapProps) {
   const compassAngle = heading ?? DIRECTION_ANGLES[direction];
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -156,9 +157,12 @@ export default function LocationMap({
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
-        Location Tracking
+      <h2 className="text-xl font-bold mb-1 text-gray-800 dark:text-white">
+        Location Tracking (X, Y)
       </h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Forward → +Y · Right → +X · Distance: {distanceTraveled.toFixed(1)} m
+      </p>
 
       <div className="relative">
         <canvas

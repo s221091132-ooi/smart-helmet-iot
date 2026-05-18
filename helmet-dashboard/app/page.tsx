@@ -233,6 +233,7 @@ export default function Dashboard() {
                     : DIRECTION_ANGLES[helmetData.direction]
                 }
                 history={positionHistory}
+                distanceTraveled={helmetData.distance_traveled}
               />
 
               {/* Movement Stats */}
