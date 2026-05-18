@@ -255,11 +255,17 @@ export function formatSpeed(speed: number): string {
   return `${speed.toFixed(1)} km/h`;
 }
 
-export function formatDistance(distance: number): string {
-  if (distance < 1000) {
-    return `${distance.toFixed(1)} m`;
+// distance stored in meters; display in feet for dashboard
+export function formatDistance(distanceMeters: number): string {
+  const feet = distanceMeters * 3.28084;
+  if (feet < 5280) {
+    return `${feet.toFixed(1)} ft`;
   }
-  return `${(distance / 1000).toFixed(2)} km`;
+  return `${(feet / 5280).toFixed(2)} mi`;
+}
+
+export function metersToFeet(meters: number): number {
+  return meters * 3.28084;
 }
 
 export function formatCapacity(capacity: number): string {

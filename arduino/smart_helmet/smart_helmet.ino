@@ -54,6 +54,7 @@ void handleResetButtonPress() {
         buzzerStoppedByButton = true;
     }
     resetLocation();
+    enableLocationTracking();
 
     if (isWiFiConnected()) {
         requestLocationResetOnServer();
@@ -108,7 +109,7 @@ void setup() {
     Serial.println("=================================");
     Serial.println("\n🔔 Buzzer is beeping continuously...");
     Serial.println("📍 Press RESET BUTTON (GPIO 27) to:");
-    Serial.println("   stop buzzer, reset location (0,0), and update website.\n");
+    Serial.println("   stop buzzer + START tracking from (0,0) on map.\n");
     
     systemInitialized = true;
     lastDataSendTime = millis();

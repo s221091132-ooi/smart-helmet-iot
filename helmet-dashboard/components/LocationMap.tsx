@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { LocationMapProps, DIRECTION_ANGLES } from '@/lib/types';
+import { LocationMapProps, DIRECTION_ANGLES, metersToFeet } from '@/lib/types';
 
 export default function LocationMap({
   currentPosition,
@@ -161,7 +161,8 @@ export default function LocationMap({
         Location Tracking (X, Y)
       </h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        Forward → +Y · Right → +X · Distance: {distanceTraveled.toFixed(1)} m
+        Forward → +Y · Right → +X · Distance: {metersToFeet(distanceTraveled).toFixed(1)} ft
+        {' '}(X: {metersToFeet(currentPosition.x).toFixed(1)} ft, Y: {metersToFeet(currentPosition.y).toFixed(1)} ft)
       </p>
 
       <div className="relative">

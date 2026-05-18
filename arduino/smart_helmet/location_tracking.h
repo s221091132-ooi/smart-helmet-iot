@@ -49,6 +49,9 @@ struct LocationData {
 
 LocationData location;
 
+// False until GPIO 27 reset — then steps update X/Y and distance
+bool locationTrackingEnabled = false;
+
 // Step detection state
 float lastAccelMag = 9.81f;
 float smoothedAccelMag = 9.81f;
@@ -69,7 +72,13 @@ void initializeLocationTracking() {
     smoothedAccelMag = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
-    Serial.println("2D map tracking: origin (0,0), forward=+Y, distance from steps");
+    locationTrackingEnabled = false;
+    Serial.println("Map at (0,0) — press RESET (GPIO27) to start step tracking");
+}
+
+void enableLocationTracking() {
+    locationTrackingEnabled = true;
+    Serial.println("TRACKING ON — walk forward/back/left/right; each step updates X/Y");
 }
 
 // Reset location to origin (0, 0) with altitude and movement cleared
@@ -193,6 +202,11 @@ void updateLocationTracking(SensorData sensorData) {
     // Use MPU9250 library AHRS yaw so compass follows physical rotation
     location.heading = normalizeHeading(sensorData.headingDeg + HEADING_MOUNT_OFFSET);
     location.direction = headingToDirection(location.heading);
+    
+    if (!locationTrackingEnabled) {
+        lastUpdateTime = currentTime;
+        return;
+    }
     
     if (detectStep(sensorData.accelMagnitude)) {
         updatePosition();

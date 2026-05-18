@@ -9,7 +9,7 @@ import FallAlertNotification from '@/components/FallAlertNotification';
 import SensorReadings from '@/components/SensorReadings';
 import ResetLocationButton from '@/components/ResetLocationButton';
 import { supabase } from '@/lib/supabase';
-import { HelmetDataRow, FallAlertRow, HistoricalPoint, DIRECTION_LABELS, DIRECTION_ANGLES } from '@/lib/types';
+import { HelmetDataRow, FallAlertRow, HistoricalPoint, DIRECTION_LABELS, DIRECTION_ANGLES, metersToFeet } from '@/lib/types';
 
 const UPDATE_INTERVAL = 1000; // 1 second
 const HISTORY_LIMIT = 50; // Keep last 50 position points
@@ -251,7 +251,7 @@ export default function Dashboard() {
                   <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded">
                     <div className="text-sm text-gray-600 dark:text-gray-400">Position</div>
                     <div className="text-lg font-bold text-gray-900 dark:text-white">
-                      ({helmetData.position_x.toFixed(1)}, {helmetData.position_y.toFixed(1)})m
+                      ({metersToFeet(helmetData.position_x).toFixed(1)}, {metersToFeet(helmetData.position_y).toFixed(1)}) ft
                     </div>
                   </div>
                 </div>
