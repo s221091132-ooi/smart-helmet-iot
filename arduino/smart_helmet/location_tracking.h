@@ -8,11 +8,13 @@
 #include "sensors.h"
 #include <math.h>
 
-// Step = peak in |accel magnitude - 1g| (works when helmet tilts while walking)
-#define STEP_DYNAMIC_THRESHOLD 1.4f   // m/s² above gravity (lower = more sensitive)
-#define STEP_LENGTH 0.71f               // meters/step (~2.3 ft)
-#define STEP_MIN_INTERVAL 280           // ms between steps
-#define SMOOTHING_ALPHA 0.35f
+// Step = spike in |accelMag - adaptiveBaseline| (fixed 9.81 fails when helmet is tilted)
+#define STEP_DYNAMIC_THRESHOLD 0.85f  // m/s² above local baseline (walking impulse)
+#define STEP_BASELINE_LOCK 1.15f        // below this deviation, baseline slowly tracks magnitude
+#define STEP_BASELINE_ALPHA 0.02f     // how fast baseline follows tilt (~50 frames)
+#define STEP_LENGTH 0.71f             // meters/step (~2.3 ft)
+#define STEP_MIN_INTERVAL 240         // ms between steps
+#define SMOOTHING_ALPHA 0.25f
 
 // If compass is 90° off on your mount, change this (e.g. 90 or -90)
 #define HEADING_MOUNT_OFFSET 0.0f
@@ -55,6 +57,7 @@ bool locationTrackingEnabled = false;
 // Step detection state
 float smoothedAccelMag = 9.81f;
 float lastDynamicAccel = 0.0f;
+float stepMagBaseline = 9.81f;   // adapts to helmet tilt (|a| is often ~10 m/s², not 9.81)
 unsigned long lastStepTime = 0;
 unsigned long lastUpdateTime = 0;
 unsigned long lastTrackDebugMs = 0;
@@ -71,6 +74,7 @@ void initializeLocationTracking() {
     
     smoothedAccelMag = 9.81f;
     lastDynamicAccel = 0.0f;
+    stepMagBaseline = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
     locationTrackingEnabled = false;
@@ -79,7 +83,12 @@ void initializeLocationTracking() {
 
 void enableLocationTracking() {
     locationTrackingEnabled = true;
-    Serial.println("TRACKING ON — walk forward/back/left/right; each step updates X/Y");
+    // Seed baseline from current orientation so first steps can cross threshold
+    SensorData s = getSensorData();
+    stepMagBaseline = s.accelMagnitude;
+    smoothedAccelMag = s.accelMagnitude;
+    lastDynamicAccel = 0.0f;
+    Serial.println("TRACKING ON — walk with helmet on; watch Serial for STEP ok");
 }
 
 // Reset location to origin (0, 0) with altitude and movement cleared
@@ -95,6 +104,7 @@ void resetLocation() {
     
     smoothedAccelMag = 9.81f;
     lastDynamicAccel = 0.0f;
+    stepMagBaseline = 9.81f;
     lastStepTime = 0;
     lastUpdateTime = millis();
     resetImuHeading();
@@ -112,19 +122,27 @@ float smoothAccelMagnitude(float magnitude) {
     return smoothedAccelMag;
 }
 
-// Detect steps from change above resting 1g (helmet on head while walking)
+// Detect steps: impulse above slowly-adapting magnitude baseline (tilted helmet OK)
 bool detectStep(float accelMagnitude) {
     unsigned long currentTime = millis();
     float smoothed = smoothAccelMagnitude(accelMagnitude);
-    float dynamic = fabsf(smoothed - 9.81f);
-    
+
+    // Track "resting" |a| when not in a big spike (helmet tilt changes total magnitude)
+    float devFromBase = fabsf(accelMagnitude - stepMagBaseline);
+    if (devFromBase < STEP_BASELINE_LOCK) {
+        stepMagBaseline =
+            (1.0f - STEP_BASELINE_ALPHA) * stepMagBaseline + STEP_BASELINE_ALPHA * accelMagnitude;
+    }
+
+    float dynamic = fabsf(smoothed - stepMagBaseline);
+
     bool isPeak = (dynamic > STEP_DYNAMIC_THRESHOLD) &&
                   (lastDynamicAccel <= STEP_DYNAMIC_THRESHOLD);
     bool enoughTimePassed = (lastStepTime == 0) ||
                             ((currentTime - lastStepTime) >= STEP_MIN_INTERVAL);
-    
+
     lastDynamicAccel = dynamic;
-    
+
     if (isPeak && enoughTimePassed) {
         if (lastStepTime > 0) {
             unsigned long intervalMs = currentTime - lastStepTime;
@@ -135,10 +153,10 @@ bool detectStep(float accelMagnitude) {
             }
         }
         lastStepTime = currentTime;
-        Serial.printf("STEP detected (dynamic=%.2f m/s2, mag=%.2f)\n", dynamic, smoothed);
+        Serial.printf("STEP ok dyn=%.2f mag=%.2f base=%.2f\n", dynamic, smoothed, stepMagBaseline);
         return true;
     }
-    
+
     return false;
 }
 
@@ -224,9 +242,9 @@ void updateLocationTracking(SensorData sensorData) {
     
     if (currentTime - lastTrackDebugMs > 2000) {
         lastTrackDebugMs = currentTime;
-        float dyn = fabsf(smoothedAccelMag - 9.81f);
-        Serial.printf("TrackON |mag|=%.2f dyn=%.2f steps=%d pos(%.2f,%.2f)m dist=%.2fm\n",
-                      sensorData.accelMagnitude, dyn, location.stepCount,
+        float dyn = fabsf(smoothedAccelMag - stepMagBaseline);
+        Serial.printf("TrackON |mag|=%.2f dyn=%.2f base=%.2f steps=%d pos(%.2f,%.2f)m dist=%.2fm\n",
+                      sensorData.accelMagnitude, dyn, stepMagBaseline, location.stepCount,
                       location.positionX, location.positionY, location.distanceTraveled);
     }
     
