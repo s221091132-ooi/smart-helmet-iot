@@ -7,7 +7,6 @@ import BatteryGauge from '@/components/BatteryGauge';
 import LocationMap from '@/components/LocationMap';
 import FallAlertNotification from '@/components/FallAlertNotification';
 import SensorReadings from '@/components/SensorReadings';
-import ResetLocationButton from '@/components/ResetLocationButton';
 import { supabase } from '@/lib/supabase';
 import { HelmetDataRow, FallAlertRow, HistoricalPoint, DIRECTION_LABELS, DIRECTION_ANGLES, metersToFeet } from '@/lib/types';
 
@@ -64,7 +63,7 @@ export default function Dashboard() {
 
       setFallAlerts(data.unacknowledged_falls || []);
 
-      // Physical button (GPIO 27) or dashboard reset updated tracking_sessions
+      // Physical reset (GPIO 27) → ESP notifies API; tracking_sessions reflects reset_requested
       if (data.reset_requested && !prevResetRequested.current) {
         setPositionHistory([]);
         setShowLocationResetBanner(true);
@@ -95,27 +94,6 @@ export default function Dashboard() {
       setFallAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
     } catch (err) {
       console.error('Error acknowledging fall alert:', err);
-    }
-  };
-
-  // Reset location tracking
-  const resetLocation = async () => {
-    try {
-      const response = await fetch('/api/helmet/reset-location', {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reset location');
-      }
-
-      // Clear position history
-      setPositionHistory([]);
-      
-      console.log('Location reset successful');
-    } catch (err) {
-      console.error('Error resetting location:', err);
-      throw err;
     }
   };
 
@@ -256,9 +234,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-
-              {/* Reset Location Button */}
-              <ResetLocationButton onReset={resetLocation} />
             </div>
 
             {/* Fall Alert History Table */}

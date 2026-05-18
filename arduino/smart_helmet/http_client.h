@@ -151,7 +151,7 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
                 Serial.println("   This will trigger ESP32 to call resetLocation()");
                 Serial.println("────────────────────────────────────────\n");
                 http.end();
-                return true;  // Signal that reset was requested
+                return true;  // API reset_location — sync helmet origin
             } else {
                 Serial.println("   ✅ No reset requested (normal operation)");
                 Serial.println("────────────────────────────────────────\n");
@@ -166,7 +166,9 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
         }
         
         http.end();
-        return httpResponseCode == 200;
+        // Return value is ONLY "server asked for location reset" — NOT generic HTTP success.
+        // (Previously: return httpResponseCode == 200 caused resetLocation() every successful POST.)
+        return false;
     } else {
         Serial.printf("HTTP POST failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
         http.end();

@@ -195,9 +195,9 @@ void loop() {
             bool resetRequested = sendSensorData(sensorData, locationData);
             handleResetButtonPress();
 
-            // Website "Reset Location" button sets last_reset_at; ESP32 syncs on next response
+            // True only when JSON has reset_location:true (e.g. web reset, or brief echo after last_reset_at)
             if (resetRequested) {
-                Serial.println("📡 Server requested location reset (dashboard button)");
+                Serial.println("📡 API reset_location=true — resetLocation() on helmet");
                 resetLocation();
                 pendingImmediateDataSend = true;
             }
