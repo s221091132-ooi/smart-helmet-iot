@@ -105,10 +105,11 @@ bool sendSensorData(SensorData sensorData, LocationData locationData) {
     accel["y"] = sensorData.accelY;
     accel["z"] = sensorData.accelZ;
     
+    // DB columns are INTEGER — send scaled raw-like values (deg/s × 131)
     JsonObject gyro = doc.createNestedObject("gyro");
-    gyro["x"] = sensorData.gyroX;
-    gyro["y"] = sensorData.gyroY;
-    gyro["z"] = sensorData.gyroZ;
+    gyro["x"] = (int)round(sensorData.gyroX * 131.0f);
+    gyro["y"] = (int)round(sensorData.gyroY * 131.0f);
+    gyro["z"] = (int)round(sensorData.gyroZ * 131.0f);
     
     JsonObject position = doc.createNestedObject("position");
     position["x"] = locationData.positionX;
