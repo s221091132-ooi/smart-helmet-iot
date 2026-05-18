@@ -27,6 +27,7 @@
 #include "location_tracking.h"
 #include "buzzer.h"
 #include "http_client.h"
+#include "debug_agent_log.h"
 
 // Timing variables
 unsigned long lastDataSendTime = 0;
@@ -41,6 +42,10 @@ static bool pendingImmediateDataSend = false;
 // GPIO 27: buzzer off + local location reset + notify server + push 0,0,0 to dashboard
 void handleResetButtonPress() {
     if (!wasResetButtonTriggered()) return;
+
+    // #region agent log
+    agentLog("H1", "smart_helmet.ino:handleResetButtonPress", "gpio27_triggered", 1.0f, 0.0f, 0.0f, 0);
+    // #endregion
 
     Serial.println("\n════════════════════════════════════════");
     Serial.println("🔘 RESET BUTTON PRESSED (GPIO 27)!");

@@ -6,6 +6,7 @@
 #define LOCATION_TRACKING_H
 
 #include "sensors.h"
+#include "debug_agent_log.h"
 #include <math.h>
 
 // Step = spike in |accelMag - adaptiveBaseline| (fixed 9.81 fails when helmet is tilted)
@@ -89,6 +90,10 @@ void enableLocationTracking() {
     smoothedAccelMag = s.accelMagnitude;
     lastDynamicAccel = 0.0f;
     Serial.println("TRACKING ON — walk with helmet on; watch Serial for STEP ok");
+    // #region agent log
+    agentLog("H1", "location_tracking.h:enableLocationTracking", "tracking_on_baseline",
+             stepMagBaseline, smoothedAccelMag, (float)location.stepCount, 0);
+    // #endregion
 }
 
 // Reset location to origin (0, 0) with altitude and movement cleared
@@ -154,6 +159,10 @@ bool detectStep(float accelMagnitude) {
         }
         lastStepTime = currentTime;
         Serial.printf("STEP ok dyn=%.2f mag=%.2f base=%.2f\n", dynamic, smoothed, stepMagBaseline);
+        // #region agent log
+        agentLog("H4", "location_tracking.h:detectStep", "step_fired", dynamic, smoothed, stepMagBaseline,
+                 location.stepCount + 1);
+        // #endregion
         return true;
     }
 
@@ -215,18 +224,28 @@ void updateSpeed() {
 // Main location tracking update (call this in main loop)
 void updateLocationTracking(SensorData sensorData) {
     readImuOnly();
-    if (!mpuHasFreshData) return;
+    if (!mpuHasFreshData) {
+        // #region agent log
+        static unsigned long lastNoImuLog = 0;
+        if (locationTrackingEnabled && millis() - lastNoImuLog > 2000) {
+            lastNoImuLog = millis();
+            agentLog("H2", "location_tracking.h:updateLocationTracking", "no_imu_sample",
+                     locationTrackingEnabled ? 1.0f : 0.0f, 0.0f, (float)activeImu, 0);
+        }
+        // #endregion
+        return;
+    }
     sensorData = getSensorData();
-    
+
     unsigned long currentTime = millis();
     float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
-    
+
     if (deltaTime <= 0.0f) return;
     if (deltaTime > 0.5f) deltaTime = 0.05f;
-    
+
     location.heading = normalizeHeading(sensorData.headingDeg + HEADING_MOUNT_OFFSET);
     location.direction = headingToDirection(location.heading);
-    
+
     if (!locationTrackingEnabled) {
         if (currentTime - lastTrackDebugMs > 4000) {
             lastTrackDebugMs = currentTime;
@@ -235,7 +254,19 @@ void updateLocationTracking(SensorData sensorData) {
         lastUpdateTime = currentTime;
         return;
     }
-    
+
+    // #region agent log
+    static unsigned long lastAgentSample = 0;
+    if (currentTime - lastAgentSample >= 500) {
+        lastAgentSample = currentTime;
+        float dyn = fabsf(smoothedAccelMag - stepMagBaseline);
+        agentLog("H3", "location_tracking.h:updateLocationTracking", "track_sample",
+                 sensorData.accelMagnitude, stepMagBaseline, dyn, location.stepCount);
+        agentLog("H5", "location_tracking.h:updateLocationTracking", "imu_path",
+                 (float)activeImu, sensorData.accelMagnitude, 0.0f, mpuInitialized ? 1 : 0);
+    }
+    // #endregion
+
     if (detectStep(sensorData.accelMagnitude)) {
         updatePosition();
     }
