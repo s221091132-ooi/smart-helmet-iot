@@ -52,7 +52,10 @@ void startFallAlertPattern() {
     currentPattern = PATTERN_FALL_ALERT;
     buzzerStateStartTime = millis();
     buzzerStateStep = 0;
-    digitalWrite(LED_PIN, HIGH);  // Turn on LED
+    buzzerOn = false;
+    digitalWrite(BUZZER_PIN, HIGH);
+    digitalWrite(LED_PIN, HIGH);
+    buzzerOn = true;
     Serial.println("BUZZER: Starting fall alert pattern");
 }
 

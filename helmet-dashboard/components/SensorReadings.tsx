@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { SensorReadingsProps, formatTemperature, formatSpeed, formatDistance, DIRECTION_LABELS } from '@/lib/types';
+import { SensorReadingsProps, formatTemperature, formatSpeed, formatDistance, formatVoltage } from '@/lib/types';
 
 export default function SensorReadings({
   temperature,
@@ -38,6 +38,22 @@ export default function SensorReadings({
             </div>
           </div>
         )}
+
+        {/* Battery Voltage */}
+        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900 dark:to-amber-900 rounded-lg">
+          <div className="flex items-center">
+            <svg className="w-8 h-8 text-yellow-500 mr-3" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 2h8v8H6V6z" />
+              <path d="M18 8h1v4h-1V8z" />
+            </svg>
+            <div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Battery Voltage</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {formatVoltage(voltage)}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Temperature */}
         <div className={`flex items-center justify-between p-4 rounded-lg ${

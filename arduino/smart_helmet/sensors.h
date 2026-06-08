@@ -72,6 +72,7 @@ float mpu6050GyroBiasZ = 0.0f;
 #define MPU6050_HEADING_GYRO_SIGN (-1.0f)
 
 // Slow ADC reads — don't run every loop (was ~120ms/loop → yaw gaps + sluggish compass)
+#define BATTERY_READ_INTERVAL_MS 500u
 #define SOLAR_READ_INTERVAL_MS 2500u
 #define TEMP_READ_INTERVAL_MS 4000u
 
@@ -259,11 +260,16 @@ bool initializeSensors() {
     return success;
 }
 
-// Read battery voltage from ADC with voltage divider
+// Read battery voltage from ADC with voltage divider (averaged for stability)
 float readBatteryVoltage() {
-    int rawValue = analogRead(BATTERY_VOLTAGE_PIN);
+    long total = 0;
+    for (int i = 0; i < 20; i++) {
+        total += analogRead(BATTERY_VOLTAGE_PIN);
+        delayMicroseconds(150);
+    }
+    float rawValue = total / 20.0f;
     // ESP32 ADC: 0-4095 for 0-3.3V
-    float voltage = (rawValue / 4095.0) * 3.3 * VOLTAGE_DIVIDER_RATIO;
+    float voltage = (rawValue / 4095.0f) * 3.3f * VOLTAGE_DIVIDER_RATIO;
     return voltage;
 }
 
@@ -399,16 +405,21 @@ void readAllSensors() {
     // IMU first — before slow solar/LM35 (those are throttled so loop stays fast for yaw integration)
     readImuOnly();
 
+    static unsigned long lastBatteryReadMs = 0;
     static unsigned long lastSolarReadMs = 0;
     static unsigned long lastTempReadMs = 0;
+    static float cachedBatteryVoltage = 4.0f;
     static float cachedSolarCurrent = 0.0f;
     static float cachedTemperature = 25.0f;
 
-    currentSensorData.batteryVoltage = readBatteryVoltage();
+    unsigned long t = millis();
+    if (lastBatteryReadMs == 0 || t - lastBatteryReadMs >= BATTERY_READ_INTERVAL_MS) {
+        cachedBatteryVoltage = readBatteryVoltage();
+        lastBatteryReadMs = t;
+    }
+    currentSensorData.batteryVoltage = cachedBatteryVoltage;
     currentSensorData.batteryPercentage = calculateBatteryPercentage(currentSensorData.batteryVoltage);
     currentSensorData.remainingCapacity = calculateRemainingCapacity(currentSensorData.batteryPercentage);
-
-    unsigned long t = millis();
     if (lastSolarReadMs == 0 || t - lastSolarReadMs >= SOLAR_READ_INTERVAL_MS) {
         cachedSolarCurrent = readSolarCurrent();
         lastSolarReadMs = t;

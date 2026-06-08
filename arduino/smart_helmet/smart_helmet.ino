@@ -143,16 +143,28 @@ void loop() {
     updateLocationTracking(sensorData);
     LocationData locationData = getLocationData();
     
+    // Fresh IMU sample right before fall detection (avoids stale data after slow ADC reads)
+    readImuOnly();
+    sensorData = getSensorData();
+    
     // Update fall detection
-    updateFallDetection(sensorData.accelMagnitude, locationData.positionX, locationData.positionY);
+    updateFallDetection(
+        sensorData.accelMagnitude,
+        sensorData.gyroX,
+        sensorData.gyroY,
+        sensorData.gyroZ,
+        locationData.positionX,
+        locationData.positionY
+    );
     
     // Check if fall was detected
     if (isFallDetected()) {
         Serial.println("\n!!! FALL DETECTED !!!");
         FallEvent fallEvent = getLastFallEvent();
         
-        // Start fall alert buzzer and LED
+        // Start fall alert buzzer immediately (don't wait for next loop / HTTP)
         startFallAlertPattern();
+        updateBuzzer();
         
         // Send fall alert to server
         if (isWiFiConnected()) {
@@ -174,9 +186,9 @@ void loop() {
         
         // Clear fall detection flag
         clearFallDetection();
+        updateBuzzer();
         
-        // Note: Fall alert buzzer will continue until manually stopped
-        // In production, you might want to add a timeout or remote acknowledgment
+        // Fall alert buzzer continues until GPIO 27 reset button is pressed
     }
     
     // Check for battery critical alert
