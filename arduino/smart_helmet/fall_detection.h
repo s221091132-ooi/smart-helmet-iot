@@ -6,25 +6,25 @@
 
 #include "sensors.h"
 
-// Fall detection thresholds
-#define IMPACT_THRESHOLD 16.0        // ~1.6g total magnitude spike on impact
-#define IMPACT_DELTA_THRESHOLD 8.0   // Sudden change in m/s² between samples
-#define STRONG_IMPACT_THRESHOLD 30.0   // Skip long stillness wait on hard impacts
-#define GYRO_STILLNESS_THRESHOLD 40.0f // deg/s — allow minor post-impact twitch
-#define ACCEL_STILLNESS_BAND 4.5f      // m/s² — magnitude near 1g when stationary
-#define STILLNESS_DURATION 1500        // 1.5 seconds in milliseconds
-#define STRONG_STILLNESS_DURATION 600  // Short stillness after hard impact
-#define DEBOUNCE_DURATION 3000         // 3 seconds between detections
-#define IMPACT_CHECK_DELAY 300         // Wait before checking stillness
-#define PEAK_WINDOW_MS 250             // Track impact peaks over this window
+// Fall detection thresholds (+50% sensitivity vs previous tuning)
+#define IMPACT_THRESHOLD 10.5f        // ~1.07g peak (was 16.0)
+#define IMPACT_DELTA_THRESHOLD 5.5f   // Sudden sample-to-sample change (was 8.0)
+#define STRONG_IMPACT_THRESHOLD 20.0f // Fast confirm path (was 30.0)
+#define GYRO_STILLNESS_THRESHOLD 60.0f // deg/s — more tolerant of minor movement (was 40.0)
+#define ACCEL_STILLNESS_BAND 6.8f      // m/s² around 1g when stationary (was 4.5)
+#define STILLNESS_DURATION 1000        // 1.0 second (was 1500)
+#define STRONG_STILLNESS_DURATION 400    // Short stillness after hard impact (was 600)
+#define LIGHT_STILLNESS_DURATION 250     // Near-instant confirm on sharp motion spikes
+#define DEBOUNCE_DURATION 400          // Short gap before next trigger (was 3000)
+#define IMPACT_CHECK_DELAY 200         // Wait before checking stillness (was 300)
+#define PEAK_WINDOW_MS 375             // Wider peak capture window (was 250)
 
 // Fall detection state machine
 enum FallState {
     IDLE,
     IMPACT_DETECTED,
     CHECKING_STILLNESS,
-    FALL_CONFIRMED,
-    DEBOUNCE
+    FALL_CONFIRMED
 };
 
 // Fall detection data
@@ -44,9 +44,18 @@ unsigned long stillnessDurationRequired = STILLNESS_DURATION;
 FallEvent lastFallEvent;
 bool fallConfirmedLatch = false;
 float prevAccelMagnitude = 9.81f;
+float lastImpactDelta = 0.0f;
 float impactPeakMagnitude = 0.0f;
 float peakWindowMax = 0.0f;
 unsigned long peakWindowStartMs = 0;
+
+static void resetImpactTracking(float seedMagnitude = 9.81f) {
+    prevAccelMagnitude = seedMagnitude;
+    lastImpactDelta = 0.0f;
+    impactPeakMagnitude = 0.0f;
+    peakWindowStartMs = millis();
+    peakWindowMax = seedMagnitude;
+}
 
 static void confirmFall(float accelMagnitude, float posX, float posY) {
     unsigned long currentTime = millis();
@@ -63,22 +72,27 @@ static void confirmFall(float accelMagnitude, float posX, float posY) {
     lastFallTime = currentTime;
 }
 
-static void resetPeakWindow(float seedMagnitude) {
-    peakWindowStartMs = millis();
-    peakWindowMax = seedMagnitude;
-}
-
 static void trackImpactPeak(float accelMagnitude) {
     unsigned long now = millis();
 
     if (peakWindowStartMs == 0 || now - peakWindowStartMs > PEAK_WINDOW_MS) {
-        resetPeakWindow(accelMagnitude);
+        resetImpactTracking(accelMagnitude);
         return;
     }
 
     if (accelMagnitude > peakWindowMax) {
         peakWindowMax = accelMagnitude;
     }
+}
+
+static unsigned long chooseStillnessDuration(float peakMagnitude, float impactDelta) {
+    if (impactDelta >= IMPACT_DELTA_THRESHOLD * 1.15f || peakMagnitude >= STRONG_IMPACT_THRESHOLD) {
+        return STRONG_STILLNESS_DURATION;
+    }
+    if (impactDelta >= IMPACT_DELTA_THRESHOLD || peakMagnitude >= IMPACT_THRESHOLD * 1.1f) {
+        return LIGHT_STILLNESS_DURATION;
+    }
+    return STILLNESS_DURATION;
 }
 
 // Initialize fall detection
@@ -90,15 +104,14 @@ void initializeFallDetection() {
     stillnessDurationRequired = STILLNESS_DURATION;
     lastFallEvent.detected = false;
     fallConfirmedLatch = false;
-    prevAccelMagnitude = 9.81f;
-    impactPeakMagnitude = 0.0f;
-    resetPeakWindow(9.81f);
+    resetImpactTracking(9.81f);
 
-    Serial.println("Fall detection initialized");
+    Serial.println("Fall detection initialized (high sensitivity mode)");
     Serial.printf("Impact threshold: %.1f m/s² (%.2fg)\n", IMPACT_THRESHOLD, IMPACT_THRESHOLD / 9.81);
     Serial.printf("Impact delta threshold: %.1f m/s²\n", IMPACT_DELTA_THRESHOLD);
     Serial.printf("Strong impact threshold: %.1f m/s²\n", STRONG_IMPACT_THRESHOLD);
     Serial.printf("Gyro stillness threshold: %.1f deg/s\n", GYRO_STILLNESS_THRESHOLD);
+    Serial.printf("Debounce between alerts: %dms\n", DEBOUNCE_DURATION);
 }
 
 // Check for impact (sudden spike or rapid magnitude change)
@@ -106,17 +119,18 @@ bool detectImpact(float accelMagnitude) {
     trackImpactPeak(accelMagnitude);
 
     float delta = fabsf(accelMagnitude - prevAccelMagnitude);
-    prevAccelMagnitude = 0.7f * prevAccelMagnitude + 0.3f * accelMagnitude;
+    lastImpactDelta = delta;
+    prevAccelMagnitude = 0.5f * prevAccelMagnitude + 0.5f * accelMagnitude;
 
     return peakWindowMax > IMPACT_THRESHOLD || delta > IMPACT_DELTA_THRESHOLD;
 }
 
-// Stationary after impact: low gyro rotation + accel magnitude near 1g
+// Stationary after impact: lenient check so slight motion still confirms
 bool detectStillness(float gyroX, float gyroY, float gyroZ, float accelMagnitude) {
     float gyroMag = sqrtf(gyroX * gyroX + gyroY * gyroY + gyroZ * gyroZ);
     bool gyroStill = gyroMag < GYRO_STILLNESS_THRESHOLD;
     bool accelStable = fabsf(accelMagnitude - 9.81f) < ACCEL_STILLNESS_BAND;
-    return gyroStill && accelStable;
+    return gyroStill || accelStable;
 }
 
 // Fall detection state machine
@@ -128,15 +142,18 @@ void updateFallDetection(float accelMagnitude, float gyroX, float gyroY, float g
             if (!mpuHasFreshData) {
                 break;
             }
+            if (currentTime - lastFallTime < DEBOUNCE_DURATION) {
+                break;
+            }
             if (detectImpact(accelMagnitude)) {
                 impactPeakMagnitude = peakWindowMax;
-                stillnessDurationRequired =
-                    (impactPeakMagnitude >= STRONG_IMPACT_THRESHOLD) ? STRONG_STILLNESS_DURATION : STILLNESS_DURATION;
+                stillnessDurationRequired = chooseStillnessDuration(impactPeakMagnitude, lastImpactDelta);
 
                 Serial.printf(
-                    "FALL DETECTION: Impact detected! peak=%.1f m/s² delta-path=%.1f m/s²\n",
+                    "FALL DETECTION: Impact detected! peak=%.1f m/s² delta=%.1f m/s² stillness=%lums\n",
                     impactPeakMagnitude,
-                    accelMagnitude
+                    lastImpactDelta,
+                    stillnessDurationRequired
                 );
                 fallState = IMPACT_DETECTED;
                 impactTime = currentTime;
@@ -156,6 +173,7 @@ void updateFallDetection(float accelMagnitude, float gyroX, float gyroY, float g
                 Serial.println("FALL DETECTION: Movement detected, false alarm");
                 fallState = IDLE;
                 impactPeakMagnitude = 0.0f;
+                resetImpactTracking(accelMagnitude);
             } else if (currentTime - stillnessStartTime >= stillnessDurationRequired) {
                 confirmFall(accelMagnitude, posX, posY);
             }
@@ -163,14 +181,6 @@ void updateFallDetection(float accelMagnitude, float gyroX, float gyroY, float g
 
         case FALL_CONFIRMED:
             // Stay here until main loop handles the alert and calls clearFallDetection()
-            break;
-
-        case DEBOUNCE:
-            if (currentTime - lastFallTime >= DEBOUNCE_DURATION) {
-                Serial.println("FALL DETECTION: Debounce period ended, ready for new detection");
-                fallState = IDLE;
-                impactPeakMagnitude = 0.0f;
-            }
             break;
     }
 }
@@ -188,10 +198,11 @@ FallEvent getLastFallEvent() {
 // Clear the fall detected flag (call after handling the fall)
 void clearFallDetection() {
     fallConfirmedLatch = false;
-    if (fallState == FALL_CONFIRMED) {
-        fallState = DEBOUNCE;
-    }
     lastFallEvent.detected = false;
+    fallState = IDLE;
+    impactPeakMagnitude = 0.0f;
+    resetImpactTracking(prevAccelMagnitude);
+    lastFallTime = millis();
 }
 
 // Get current fall detection state (for debugging)
@@ -201,7 +212,6 @@ const char* getFallStateString() {
         case IMPACT_DETECTED: return "IMPACT_DETECTED";
         case CHECKING_STILLNESS: return "CHECKING_STILLNESS";
         case FALL_CONFIRMED: return "FALL_CONFIRMED";
-        case DEBOUNCE: return "DEBOUNCE";
         default: return "UNKNOWN";
     }
 }
@@ -209,13 +219,16 @@ const char* getFallStateString() {
 // Print fall detection status
 void printFallStatus() {
     Serial.printf("Fall Detection State: %s\n", getFallStateString());
-    Serial.printf("  Peak window max: %.1f m/s² | prev smoothed: %.1f m/s²\n", peakWindowMax, prevAccelMagnitude);
+    Serial.printf("  Peak window max: %.1f m/s² | prev smoothed: %.1f m/s² | last delta: %.1f m/s²\n",
+                  peakWindowMax, prevAccelMagnitude, lastImpactDelta);
     if (fallState == CHECKING_STILLNESS) {
         unsigned long elapsed = millis() - stillnessStartTime;
         Serial.printf("  Stillness check: %lums / %lums\n", elapsed, stillnessDurationRequired);
-    } else if (fallState == DEBOUNCE) {
+    } else if (fallState == IDLE && lastFallTime > 0) {
         unsigned long elapsed = millis() - lastFallTime;
-        Serial.printf("  Debounce: %lums / %dms\n", elapsed, DEBOUNCE_DURATION);
+        if (elapsed < DEBOUNCE_DURATION) {
+            Serial.printf("  Re-arm in: %lums\n", DEBOUNCE_DURATION - elapsed);
+        }
     }
 }
 
